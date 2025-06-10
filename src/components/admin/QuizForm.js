@@ -22,7 +22,8 @@ export default function QuizForm({ onSuccess, onCancel, quiz = null }) {
     try {
       const { data, error } = await supabase
         .from('quiz_categories')
-        .select('is_active', true)
+        .select('id, name, icon, is_active')
+        .eq('is_active', true)
         .order('name')
       
       if (error) throw error

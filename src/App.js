@@ -59,7 +59,7 @@ function App() {
             <AdminRoute>
               <Routes>
                 <Route path="/" element={<AdminDashboard />} />
-                <Route path="/" element={<CategoryManager />} />
+                <Route path="/categories" element={<CategoryManager />} />
                 <Route path="/quizzes" element={<QuizManager />} />
               </Routes>
             </AdminRoute>

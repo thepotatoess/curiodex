@@ -3,6 +3,8 @@ import { supabase } from '../../lib/supabase'
 import '../../CategoryManager.css'
 
 export default function CategoryManager() {
+  console.log("Component is rendering")
+
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [newCategory, setNewCategory] = useState('')
@@ -11,6 +13,7 @@ export default function CategoryManager() {
   const [showAddForm, setShowAddForm] = useState(false)
 
   useEffect(() => {
+    console.log("Calling loadCategories...")
     loadCategories()
   }, [])
 
@@ -18,7 +21,7 @@ export default function CategoryManager() {
     try {
       const { data, error } = await supabase
         .from('quiz_categories')
-        .select('*')
+        .select('id, name, color, icon, is_active')
         .order('name')
 
       if (error) throw error
@@ -27,71 +30,14 @@ export default function CategoryManager() {
       console.error('Error loading categories:', error)
       // If table doesn't exist, create it
       if (error.message.includes('relation "public.quiz_categories" does not exist')) {
-        await createCategoriesTable()
+        console.error('fuck')
       }
     } finally {
       setLoading(false)
     }
   }
 
-  const createCategoriesTable = async () => {
-    try {
-      // Create table
-      await supabase.rpc('exec_sql', {
-        sql: `
-          CREATE TABLE IF NOT EXISTS public.quiz_categories (
-            id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-            name TEXT UNIQUE NOT NULL,
-            color TEXT DEFAULT '#6b7280',
-            icon TEXT DEFAULT '📚',
-            is_active BOOLEAN DEFAULT true,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-          );
-          
-          -- Enable RLS
-          ALTER TABLE public.quiz_categories ENABLE ROW LEVEL SECURITY;
-          
-          -- Create policies
-          CREATE POLICY "Categories are viewable by everyone" ON quiz_categories
-            FOR SELECT USING (true);
-            
-          CREATE POLICY "Only admins can modify categories" ON quiz_categories
-            FOR ALL USING (EXISTS (
-              SELECT 1 FROM profiles 
-              WHERE profiles.id = auth.uid() 
-              AND profiles.role = 'admin'
-            ));
-        `
-      })
-
-      // Insert default categories
-      const defaultCategories = [
-        { name: 'Science', color: '#10b981', icon: '🔬' },
-        { name: 'History', color: '#f59e0b', icon: '📜' },
-        { name: 'Geography', color: '#3b82f6', icon: '🌍' },
-        { name: 'Mathematics', color: '#8b5cf6', icon: '🔢' },
-        { name: 'Literature', color: '#ec4899', icon: '📖' },
-        { name: 'Technology', color: '#14b8a6', icon: '💻' },
-        { name: 'Sports', color: '#f97316', icon: '⚽' },
-        { name: 'Music', color: '#a855f7', icon: '🎵' },
-        { name: 'Movies & TV', color: '#ef4444', icon: '🎬' },
-        { name: 'Art', color: '#eab308', icon: '🎨' },
-        { name: 'General Knowledge', color: '#6b7280', icon: '💡' }
-      ]
-
-      const { error: insertError } = await supabase
-        .from('quiz_categories')
-        .insert(defaultCategories)
-
-      if (insertError) throw insertError
-
-      // Reload categories
-      loadCategories()
-    } catch (error) {
-      console.error('Error creating categories table:', error)
-      alert('Error setting up categories. You may need to run the SQL manually in Supabase.')
-    }
-  }
+  
 
   const addCategory = async () => {
     if (!newCategory.trim()) return
@@ -197,7 +143,8 @@ export default function CategoryManager() {
     }
   }
 
-  if (loading) return <div className="categories-loading">Loading categories...</div>
+  if (loading) return <div className="categories-loading">ÆLoading categories...</div>
+
 
   return (
     <div className="categories-container">
