@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 
 export default function QuizForm({ onSuccess, onCancel, quiz = null }) {
+  const [categories, setCategories] = useState([])
   const [formData, setFormData] = useState({
     title: quiz?.title || '',
     description: quiz?.description || '',
@@ -11,6 +12,27 @@ export default function QuizForm({ onSuccess, onCancel, quiz = null }) {
   })
   const [questions, setQuestions] = useState(quiz?.questions || [])
   const [loading, setLoading] = useState(false)
+  const [loadingCategories, setLoadingCategories] = useState(true)
+
+  useEffect(() => {
+    loadCategories()
+  }, [])
+
+  const loadCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('quiz_categories')
+        .select('is_active', true)
+        .order('name')
+      
+      if (error) throw error
+      setCategories(data || [])
+    } catch (error) {
+      console.error('Error loading categories:', error)
+    } finally {
+      setLoadingCategories(false)
+    }
+  }
 
   const addQuestion = () => {
     setQuestions([...questions, {
@@ -140,14 +162,32 @@ export default function QuizForm({ onSuccess, onCancel, quiz = null }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '5px' }}>Category *</label>
-            <input
-              type="text"
+            <select
               value={formData.category}
               onChange={(e) => setFormData({...formData, category: e.target.value})}
-              placeholder="e.g., Science, History, Math"
               required
-              style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
-            />
+              disabled={loadingCategories}
+              style={{ 
+                width: '100%', 
+                padding: '8px', 
+                borderRadius: '4px', 
+                border: '1px solid #ddd',
+                backgroundColor: 'white',
+                cursor: loadingCategories ? 'not-allowed' : 'pointer'
+              }}
+            >
+              <option value="">Select a category...</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.name}>
+                  {cat.icon} {cat.name}
+                </option>
+              ))}
+            </select>
+            {loadingCategories && (
+              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                Loading categories...
+              </div>
+            )}
           </div>
           
           <div>

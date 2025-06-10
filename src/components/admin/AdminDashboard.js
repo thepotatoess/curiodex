@@ -214,6 +214,19 @@ export default function AdminDashboard() {
             Manage Users
           </button>
           <button 
+            onClick={() => window.location.href = '/admin/categories'}
+            style={{ 
+              padding: '10px 20px', 
+              backgroundColor: '#f59e0b', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Manage Categories
+          </button>
+          <button 
             style={{ 
               padding: '10px 20px', 
               backgroundColor: '#17a2b8', 

@@ -7,6 +7,8 @@ import AdminDashboard from './components/admin/AdminDashboard'
 import QuizManager from './components/admin/QuizManager'
 import QuizList from './components/QuizList'
 import ManageUsers from './components/admin/ManageUsers'
+import CategoryManager from './components/admin/CategoryManager'
+import QuizStats from './components/QuizStats'
 
 function App() {
   const { user, profile, loading, signOut } = useAuth()
@@ -22,6 +24,7 @@ function App() {
         <nav style={{ padding: '20px', borderBottom: '1px solid #ddd', marginBottom: '20px' }}>
           <Link to="/" style={{ marginRight: '20px', textDecoration: 'none', color: '#007bff' }}>Home</Link>
           <Link to="/quizzes" style={{ marginRight: '20px', textDecoration: 'none', color: '#007bff' }}>Take Quizzes</Link>
+          <Link to="/stats" style={{ marginRight: '20px', textDecoration: 'none', color: '#007bff' }}>My Statistics</Link>
           {isAdmin && <Link to="/admin" style={{ marginRight: '20px', textDecoration: 'none', color: '#007bff' }}>Admin</Link>}
           <button onClick={signOut} style={{ float: 'right', padding: '8px 16px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Sign Out</button>
           <span style={{ float: 'right', marginRight: '20px' }}>Hello, {profile?.username}</span>
@@ -49,12 +52,14 @@ function App() {
           } />
           
           <Route path="/quizzes" element={<QuizList />} />
+          <Route path="/stats" element={<QuizStats />} />
           <Route path="/admin/users" element={<ManageUsers />} />
           
           <Route path="/admin/*" element={
             <AdminRoute>
               <Routes>
                 <Route path="/" element={<AdminDashboard />} />
+                <Route path="/" element={<CategoryManager />} />
                 <Route path="/quizzes" element={<QuizManager />} />
               </Routes>
             </AdminRoute>

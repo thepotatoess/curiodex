@@ -11,44 +11,68 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
   const [showResults, setShowResults] = useState(false)
   const [results, setResults] = useState(null)
   const [startTime] = useState(Date.now())
+  const [previousBest, setPreviousBest] = useState(null)
+  const [isNewRecord, setIsNewRecord] = useState(false)
 
   useEffect(() => {
-    const loadQuiz = async () => {
-      try {
-        const { data: quizData, error: quizError } = await supabase
-          .from('quizzes')
-          .select('*')
-          .eq('id', quizId)
-          .eq('is_published', true)
-          .single()
+  const loadQuiz = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      const { data: quizData, error: quizError } = await supabase
+        .from('quizzes')
+        .select('*')
+        .eq('id', quizId)
+        .eq('is_published', true)
+        .single()
 
-        if (quizError) throw quizError
+      if (quizError) throw quizError
 
-        const { data: questionsData, error: questionsError } = await supabase
-          .from('questions')
-          .select('*')
+      const { data: questionsData, error: questionsError } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('quiz_id', quizId)
+        .order('order_index')
+
+      if (questionsError) throw questionsError
+
+      // Parse options JSON
+      const parsedQuestions = questionsData.map(q => ({
+        ...q,
+        options: JSON.parse(q.options || '[]')
+      }))
+
+      // Fetch user's previous attempts
+      if (user) {
+        const { data: previousAttempts, error: attemptsError } = await supabase
+          .from('user_quiz_attempts')
+          .select('score, max_score')
+          .eq('user_id', user.id)
           .eq('quiz_id', quizId)
-          .order('order_index')
+          .order('score', { ascending: false })
+          .limit(1)
 
-        if (questionsError) throw questionsError
-
-        // Parse options JSON
-        const parsedQuestions = questionsData.map(q => ({
-          ...q,
-          options: JSON.parse(q.options || '[]')
-        }))
-
-        setQuiz(quizData)
-        setQuestions(parsedQuestions)
-      } catch (error) {
-        console.error('Error loading quiz:', error)
-      } finally {
-        setLoading(false)
+        if (!attemptsError && previousAttempts && previousAttempts.length > 0) {
+          const bestAttempt = previousAttempts[0]
+          setPreviousBest({
+            score: bestAttempt.score,
+            maxScore: bestAttempt.max_score,
+            percentage: Math.round((bestAttempt.score / bestAttempt.max_score) * 100)
+          })
+        }
       }
-    }
 
-    loadQuiz()
-  }, [quizId])
+      setQuiz(quizData)
+      setQuestions(parsedQuestions)
+    } catch (error) {
+      console.error('Error loading quiz:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  loadQuiz()
+}, [quizId])
 
   const handleAnswer = (questionId, answer) => {
     setAnswers({
@@ -103,6 +127,11 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
 
       if (error) throw error
 
+      const currentPercentage = Math.round((score / maxScore) * 100)
+      if (!previousBest || currentPercentage > previousBest.percentage) {
+        setIsNewRecord(true)
+      }
+
       // Show results
       setResults({
         score,
@@ -125,6 +154,7 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
     setCurrentQuestion(0)
     setAnswers({})
     setResults(null)
+    setIsNewRecord(false)
   }
 
   const getPerformanceData = (percentage) => {
@@ -197,6 +227,23 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
           textAlign: 'center',
           marginBottom: '30px'
         }}>
+          {isNewRecord && (
+            <div style={{
+              backgroundColor: '#fbbf24',
+              color: '#78350f',
+              padding: '12px 24px',
+              borderRadius: '50px',
+              display: 'inline-block',
+              marginBottom: '20px',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              animation: 'pulse 2s infinite'
+            }}>
+
+              🏆 NEW PERSONAL BEST! 🏆
+            </div>
+          )}
+
           <div style={{ fontSize: '64px', marginBottom: '16px' }}>
             {performance.emoji}
           </div>
@@ -215,7 +262,7 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
             margin: '0 0 24px 0', 
             color: '#6b7280' 
           }}>
-            {performance.message}
+            {isNewRecord ? 'You beat your previous best score!' : performance.message}
           </p>
 
           <div style={{ 
@@ -233,6 +280,17 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
           }}>
             {results.score} out of {results.maxScore} points
           </div>
+
+          {previousBest && !isNewRecord && (
+            <div style={{
+            marginTop: '16px',
+            fontSize: '14px',
+            color: '#6b7280'
+          }}>
+            Previous best: {previousBest.percentage}%
+          </div>
+          )}
+
         </div>
 
         {/* Quiz Details */}
@@ -359,33 +417,70 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
 
       <div style={{ backgroundColor: '#f8f9fa', padding: '30px', borderRadius: '8px', marginBottom: '20px' }}>
         <h3 style={{ marginBottom: '20px' }}>{currentQ.question_text}</h3>
-        <div style={{ display: 'grid', gap: '10px' }}>
-          {currentQ.options.map((option, index) => (
-            <label 
-              key={index} 
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                padding: '12px', 
-                border: '2px solid #dee2e6', 
-                borderRadius: '6px', 
-                cursor: 'pointer',
-                backgroundColor: answers[currentQ.id] === option ? '#e3f2fd' : 'white',
-                borderColor: answers[currentQ.id] === option ? '#2196f3' : '#dee2e6'
-              }}
-            >
-              <input
-                type="radio"
-                name={`question-${currentQ.id}`}
-                value={option}
-                checked={answers[currentQ.id] === option}
-                onChange={(e) => handleAnswer(currentQ.id, e.target.value)}
-                style={{ marginRight: '12px' }}
-              />
-              <span>{String.fromCharCode(65 + index)}: {option}</span>
-            </label>
-          ))}
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          {currentQ.options.map((option, index) => {
+            const isSelected = answers[currentQ.id] === option
+            const isCorrect = option === currentQ.correct_answer
+            const showFeedback = answers[currentQ.id] !== undefined
+            
+            let backgroundColor = 'white'
+            let borderColor = '#dee2e6'
+            
+            if (showFeedback) {
+              if (isCorrect) {
+                backgroundColor = '#d4edda'
+                borderColor = '#28a745'
+              } else if (isSelected) {
+                backgroundColor = '#f8d7da'
+                borderColor = '#dc3545'
+              } else {
+                backgroundColor = '#f8d7da'
+                borderColor = '#dc3545'
+              }
+            } else if (isSelected) {
+              backgroundColor = '#e3f2fd'
+              borderColor = '#2196f3'
+            }
+            
+            return (
+              <label 
+                key={index} 
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  padding: '12px', 
+                  border: `2px solid ${borderColor}`, 
+                  borderRadius: '6px', 
+                  cursor: showFeedback ? 'default' : 'pointer',
+                  backgroundColor: backgroundColor,
+                  transition: 'all 0.3s ease',
+                  pointerEvents: showFeedback ? 'none' : 'auto'
+                }}
+              >
+                <input
+                  type="radio"
+                  name={`question-${currentQ.id}`}
+                  value={option}
+                  checked={isSelected}
+                  onChange={(e) => handleAnswer(currentQ.id, e.target.value)}
+                  disabled={showFeedback}
+                  style={{ marginRight: '12px' }}
+                />
+                <span style={{ fontWeight: showFeedback && isCorrect ? 'bold' : 'normal' }}>
+                  {String.fromCharCode(65 + index)}: {option}
+                </span>
+                {showFeedback && isCorrect && (
+                  <span style={{ marginLeft: 'auto', color: '#28a745' }}>✓</span>
+                )}
+                {showFeedback && isSelected && !isCorrect && (
+                  <span style={{ marginLeft: 'auto', color: '#dc3545' }}>✗</span>
+                )}
+              </label>
+            )
+          })}
         </div>
+
         <div style={{ marginTop: '15px', fontSize: '14px', color: '#666' }}>
           Points: {currentQ.points}
         </div>

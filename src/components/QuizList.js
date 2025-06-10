@@ -13,6 +13,10 @@ export default function QuizList() {
     loadUserAttempts()
   }, [])
 
+  useEffect(() => {
+    return () => {}
+  })
+
   const loadQuizzes = async () => {
     try {
       const { data, error } = await supabase
@@ -153,7 +157,7 @@ export default function QuizList() {
                       fontWeight: 'bold'
                     }}
                   >
-                    {userBest ? 'Retake Quiz' : 'Start Quiz'}
+                    {userBest ? 'Play again' : 'Start Quiz'}
                   </button>
                 </div>
               </div>
