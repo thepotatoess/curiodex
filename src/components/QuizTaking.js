@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { ConfirmModal } from './ConfirmModal'
 import '../css/QuizTaking.css'
 
 export default function QuizTaking({ quizId, onComplete, onCancel }) {
@@ -14,7 +15,8 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
   const [startTime] = useState(Date.now())
   const [previousBest, setPreviousBest] = useState(null)
   const [isNewRecord, setIsNewRecord] = useState(false)
-  //const [answerLocked, setAnswerLocked] = useState(false)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  
   const currentQ = questions[currentQuestion] || null
   const isAnswered = currentQ ? answers[currentQ.id] !== undefined : false
 
@@ -83,20 +85,28 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
       ...answers,
       [questionId]: answer
     })
-    //setAnswerLocked(true)
   }
 
   const nextQuestion = () => {
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1)
     }
-    //setAnswerLocked(false)
   }
 
   const prevQuestion = () => {
     if (currentQuestion > 0) {
       setCurrentQuestion(currentQuestion - 1)
     }
+  }
+
+  const handleCancelClick = () => {
+    // Always show confirmation modal for now (for testing)
+    setShowCancelConfirm(true)
+  }
+
+  const confirmCancel = () => {
+    setShowCancelConfirm(false)
+    onCancel()
   }
 
   const submitQuiz = async () => {
@@ -254,15 +264,11 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
           })}
         </div>
 
-      
-        
-
         {isAnswered && currentQ.explanation &&  (
           <div className="question-description">
             <p>{currentQ.explanation}</p>
           </div>
         )}
-        
 
         <div className="question-points">
           Points: {currentQ.points}
@@ -282,7 +288,7 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
 
         <div className="nav-buttons-right">
           <button
-            onClick={onCancel}
+            onClick={handleCancelClick}
             className="nav-btn nav-btn-cancel"
           >
             Cancel Quiz
@@ -311,6 +317,28 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
       <div className="quiz-progress-indicator">
         Answered: {Object.keys(answers).length} / {questions.length} questions
       </div>
+
+      {/* Cancel Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showCancelConfirm}
+        title="Cancel Quiz?"
+        message={
+          <div>
+            <p>Are you sure you want to cancel this quiz?</p>
+            <p style={{ color: '#dc3545', fontWeight: 'bold', margin: '8px 0 0 0' }}>
+              ⚠️ Your progress will be lost and won't be saved.
+            </p>
+            <p style={{ fontSize: '14px', color: '#6b7280', margin: '8px 0 0 0' }}>
+              You've answered {Object.keys(answers).length} of {questions.length} questions.
+            </p>
+          </div>
+        }
+        onConfirm={confirmCancel}
+        onCancel={() => setShowCancelConfirm(false)}
+        confirmText="Cancel Quiz"
+        cancelText="Continue Quiz"
+        danger={true}
+      />
     </div>
   )
 }

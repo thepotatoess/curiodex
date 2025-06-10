@@ -44,20 +44,40 @@ export default function QuizManager() {
     }
   }
 
+  // Deletes quiz and all attempts on that quiz.
   const handleDelete = async () => {
     try {
-      const { error } = await supabase
+      const quizId = deleteModal.quiz.id
+
+      // Delete all user quiz attempts before deleting the quiz.
+      const { error: attemptsError } = await supabase
+        .from('user_quiz_attempts')
+        .delete()
+        .eq('quiz_id', quizId)
+      
+      if (attemptsError) throw attemptsError
+
+      // Delete all questions for this quiz
+      const { error: questionError } = await supabase
+        .from('questions')
+        .delete()
+        .eq('quiz_id', quizId)
+      
+      if (questionError) throw questionError
+
+      // Delete the quiz itself
+      const { error: quizError } = await supabase
         .from('quizzes')
         .delete()
         .eq('id', deleteModal.quiz.id)
 
-      if (error) throw error
+      if (quizError) throw quizError
 
-      addToast('Quiz deleted successfully', 'success')
+      addToast('Quiz and all related data deleted successfully', 'success')
       loadQuizzes()
     } catch (error) {
       console.error('Error deleting quiz:', error)
-      addToast('Failed to delete quiz', 'error')
+      addToast('Failed to delete quiz: ' + error.message, 'error')
     } finally {
       setDeleteModal({ isOpen: false, quiz: null })
     }
@@ -202,10 +222,35 @@ export default function QuizManager() {
       <ConfirmModal
         isOpen={deleteModal.isOpen}
         title="Delete Quiz"
-        message={`Are you sure you want to delete "${deleteModal.quiz?.title}"? This will permanently delete the quiz and all its questions. This action cannot be undone.`}
+        message={
+          <div>
+            <p>Are you sure you want to delete <strong>"{deleteModal.quiz?.title}"</strong>?</p>
+            
+            <div style={{ 
+              background: '#fef2f2', 
+              border: '1px solid #fecaca', 
+              borderRadius: '6px', 
+              padding: '12px', 
+              margin: '12px 0',
+              color: '#991b1b'
+            }}>
+              <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>⚠️ WARNING:</p>
+              <p style={{ margin: '0 0 4px 0' }}>This will permanently delete:</p>
+              <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
+                <li>The quiz and all its questions</li>
+                <li>ALL user attempts and scores for this quiz</li>
+                <li>This action cannot be undone</li>
+              </ul>
+            </div>
+            
+            <p style={{ margin: '8px 0 0 0', fontSize: '14px', color: '#6b7280' }}>
+              <strong>{deleteModal.quiz?.play_count || 0}</strong> users have taken this quiz.
+            </p>
+          </div>
+        }
         onConfirm={handleDelete}
         onCancel={() => setDeleteModal({ isOpen: false, quiz: null })}
-        confirmText="Delete Quiz"
+        confirmText="Delete Everything"
         danger={true}
       />
 

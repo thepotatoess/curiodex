@@ -10,6 +10,13 @@ export default function QuizList() {
   const [takingQuiz, setTakingQuiz] = useState(null)
   const [userAttempts, setUserAttempts] = useState([])
   const [quizResults, setQuizResults] = useState(null)
+  
+  // Search and filter states
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('all')
+  const [selectedDifficulty, setSelectedDifficulty] = useState('all')
+  const [selectedPlayedStatus, setSelectedPlayedStatus] = useState('all')
+  const [availableCategories, setAvailableCategories] = useState([])
 
   useEffect(() => {
     loadQuizzes()
@@ -28,6 +35,7 @@ export default function QuizList() {
         supabase
           .from('quiz_categories')
           .select('name, icon, color')
+          .eq('is_active', true)
       ])
 
       if (quizzesRes.error) throw quizzesRes.error
@@ -50,6 +58,10 @@ export default function QuizList() {
       })
 
       setQuizzes(quizzesWithCategoryMeta)
+      
+      // Set available categories for filter
+      const uniqueCategories = [...new Set(quizzesWithCategoryMeta.map(q => q.category_name))]
+      setAvailableCategories(uniqueCategories)
     } catch (error) {
       console.error('Error loading quizzes:', error)
     } finally {
@@ -116,8 +128,27 @@ export default function QuizList() {
     }
   }
 
+  // Filter quizzes based on search and filters
+  const filteredQuizzes = quizzes.filter(quiz => {
+    const matchesSearch = searchTerm === '' || 
+      quiz.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      quiz.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      quiz.category_name.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    const matchesCategory = selectedCategory === 'all' || quiz.category_name === selectedCategory
+    const matchesDifficulty = selectedDifficulty === 'all' || quiz.difficulty === selectedDifficulty
+    
+    // Check if user has played this quiz
+    const hasPlayed = getUserBestScore(quiz.id) !== null
+    const matchesPlayedStatus = selectedPlayedStatus === 'all' ||
+      (selectedPlayedStatus === 'played' && hasPlayed) ||
+      (selectedPlayedStatus === 'unplayed' && !hasPlayed)
+    
+    return matchesSearch && matchesCategory && matchesDifficulty && matchesPlayedStatus
+  })
+
   const groupQuizzesByCategory = () => {
-    return quizzes.reduce((acc, quiz) => {
+    return filteredQuizzes.reduce((acc, quiz) => {
       const category = quiz.category_name
       if (!acc[category]) {
         acc[category] = {
@@ -129,6 +160,21 @@ export default function QuizList() {
       acc[category].quizzes.push(quiz)
       return acc
     }, {})
+  }
+
+  const clearFilters = () => {
+    setSearchTerm('')
+    setSelectedCategory('all')
+    setSelectedDifficulty('all')
+    setSelectedPlayedStatus('all')
+  }
+
+  const startRandomQuiz = () => {
+    if (filteredQuizzes.length === 0) return
+    
+    const randomIndex = Math.floor(Math.random() * filteredQuizzes.length)
+    const randomQuiz = filteredQuizzes[randomIndex]
+    startQuiz(randomQuiz.id)
   }
 
   if (takingQuiz) {
@@ -154,22 +200,133 @@ export default function QuizList() {
   if (loading) return <div className="quiz-loading">Loading quizzes...</div>
 
   const grouped = groupQuizzesByCategory()
+  const hasActiveFilters = searchTerm !== '' || selectedCategory !== 'all' || selectedDifficulty !== 'all' || selectedPlayedStatus !== 'all'
 
   return (
     <div className="quiz-list-container">
       <h1 className="quiz-list-title">Available Quizzes</h1>
 
-      {quizzes.length === 0 ? (
+      {/* Search and Filter Controls */}
+      <div className="quiz-controls">
+        <div className="search-section">
+          <input
+            type="text"
+            placeholder="Search quizzes by name, description, or category..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="search-input"
+          />
+        </div>
+
+        <div className="filter-section">
+          <div className="filter-group">
+            <label htmlFor="category-filter">Category:</label>
+            <select
+              id="category-filter"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Categories</option>
+              {availableCategories.map(category => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="difficulty-filter">Difficulty:</label>
+            <select
+              id="difficulty-filter"
+              value={selectedDifficulty}
+              onChange={(e) => setSelectedDifficulty(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Difficulties</option>
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="played-filter">Status:</label>
+            <select
+              id="played-filter"
+              value={selectedPlayedStatus}
+              onChange={(e) => setSelectedPlayedStatus(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">All Quizzes</option>
+              <option value="played">Played Before</option>
+              <option value="unplayed">Not Played</option>
+            </select>
+          </div>
+
+          <div className="action-buttons">
+            <button
+              onClick={startRandomQuiz}
+              disabled={filteredQuizzes.length === 0}
+              className="btn btn-success random-quiz-btn"
+            >
+              🎲 Random Quiz
+            </button>
+
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="btn btn-outline clear-filters-btn"
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Results Summary */}
+      <div className="results-summary">
+        {hasActiveFilters ? (
+          <p>
+            Showing {filteredQuizzes.length} of {quizzes.length} quizzes
+            {searchTerm && <span> matching "{searchTerm}"</span>}
+            {selectedCategory !== 'all' && <span> in {selectedCategory}</span>}
+            {selectedDifficulty !== 'all' && <span> ({selectedDifficulty} difficulty)</span>}
+            {selectedPlayedStatus !== 'all' && <span> ({selectedPlayedStatus})</span>}
+          </p>
+        ) : (
+          <p>Showing all {quizzes.length} quizzes</p>
+        )}
+      </div>
+
+      {/* Quiz List */}
+      {filteredQuizzes.length === 0 ? (
         <div className="quiz-empty-state">
-          <h3>No quizzes available yet</h3>
-          <p>Check back later for new quizzes!</p>
+          {hasActiveFilters ? (
+            <>
+              <h3>No quizzes found</h3>
+              <p>Try adjusting your search terms or filters.</p>
+              <button onClick={clearFilters} className="btn btn-primary">
+                Clear Filters
+              </button>
+            </>
+          ) : (
+            <>
+              <h3>No quizzes available yet</h3>
+              <p>Check back later for new quizzes!</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="quiz-grouped-list">
           {Object.entries(grouped).map(([categoryName, { icon, color, quizzes }]) => (
             <div key={categoryName} className="quiz-category-section">
               <h2 className="quiz-category-title" style={{ color }}>
-                <span className="category-icon">{icon}</span> {categoryName}
+                <span className="category-icon">{icon}</span> 
+                {categoryName}
+                <span className="category-count">({quizzes.length})</span>
               </h2>
               <div className="quiz-grid">
                 {quizzes.map(quiz => {

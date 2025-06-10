@@ -12,6 +12,106 @@
   margin-bottom: var(--spacing-xl);
 }
 
+/* ========== Search and Filter Controls ========== */
+.quiz-controls {
+  background-color: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.search-section {
+  margin-bottom: var(--spacing-md);
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.filter-section {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.filter-group label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+.filter-select {
+  padding: 8px 12px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  background-color: white;
+  min-width: 140px;
+  transition: border-color 0.2s ease;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.action-buttons {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-end;
+}
+
+.random-quiz-btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.random-quiz-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.clear-filters-btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  min-width: auto;
+}
+
+/* ========== Results Summary ========== */
+.results-summary {
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-sm) 0;
+  color: var(--gray-600);
+  font-size: 14px;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.results-summary p {
+  margin: 0;
+}
+
 /* ========== Quiz Grid ========== */
 .quiz-grid {
   display: grid;
@@ -120,6 +220,7 @@
 .quiz-empty-state p {
   color: var(--gray-500);
   font-size: 16px;
+  margin-bottom: var(--spacing-md);
 }
 
 /* ========== Loading State ========== */
@@ -128,6 +229,37 @@
   text-align: center;
   color: var(--gray-600);
   font-size: 16px;
+}
+
+/* ========== Category Sections ========== */
+.quiz-category-section {
+  margin-bottom: var(--spacing-xl);
+}
+
+.quiz-category-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 24px;
+  margin-bottom: var(--spacing-lg);
+  color: var(--gray-800);
+}
+
+.category-icon {
+  font-size: 28px;
+}
+
+.category-count {
+  font-size: 16px;
+  color: var(--gray-500);
+  font-weight: normal;
+  margin-left: var(--spacing-sm);
+}
+
+.quiz-grouped-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
 }
 
 /* ========== Responsive ========== */
@@ -147,47 +279,43 @@
   .quiz-meta {
     gap: var(--spacing-md);
   }
+  
+  .filter-section {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-md);
+  }
+  
+  .filter-group {
+    width: 100%;
+  }
+  
+  .filter-select {
+    min-width: auto;
+    width: 100%;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .random-quiz-btn,
+  .clear-filters-btn {
+    width: 100%;
+  }
 }
 
-.quiz-category-section {
-  margin-bottom: var(--spacing-xl);
+@media (max-width: 480px) {
+  .quiz-controls {
+    padding: var(--spacing-md);
+  }
+  
+  .quiz-list-title {
+    font-size: 24px;
+  }
+  
+  .quiz-category-title {
+    font-size: 20px;
+  }
 }
-
-.quiz-category-title {
-  font-size: 24px;
-  color: var(--gray-800);
-  margin-bottom: var(--spacing-lg);
-}
-
-.quiz-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-xl);
-}
-
-.quiz-controls select,
-.quiz-controls button {
-  padding: 8px 12px;
-  font-size: 14px;
-}
-
-.quiz-grouped-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xl);
-}
-
-.quiz-category-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 24px;
-  margin-bottom: var(--spacing-lg);
-}
-
-.category-icon {
-  font-size: 28px;
-}
-
-

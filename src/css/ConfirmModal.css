@@ -128,3 +128,8 @@
     padding: 12px 16px;
   }
 }
+
+* Preserves newlines and wrapping */
+.modal-message {
+  white-space: pre-line; 
+}

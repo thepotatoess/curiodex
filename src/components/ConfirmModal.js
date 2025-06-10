@@ -25,7 +25,7 @@ export function ConfirmModal({
         </h3>
         
         <p className="modal-message">
-          {message}
+          {typeof message === 'string' ? <p>{message}</p> : message}
         </p>
         
         <div className="modal-actions">
