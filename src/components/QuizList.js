@@ -85,10 +85,18 @@ export default function QuizList() {
     }
   }
 
+  // Updated: Now clicking on quiz card starts the quiz
   const handleQuizClick = (quizId) => {
+    navigate(`/quiz/${quizId}/play`)
+  }
+
+  // New function: Handle viewing quiz details
+  const handleViewDetails = (e, quizId) => {
+    e.stopPropagation() // Prevent the card click event
     navigate(`/quiz/${quizId}`)
   }
 
+  // Renamed for clarity - this is now redundant with handleQuizClick but keeping for consistency
   const handleQuickStart = (e, quizId) => {
     e.stopPropagation() // Prevent the card click event
     navigate(`/quiz/${quizId}/play`)
@@ -259,7 +267,7 @@ export default function QuizList() {
             {selectedPlayedStatus !== 'all' && <span> ({selectedPlayedStatus})</span>}
           </p>
         ) : (
-          <p>Showing all {quizzes.length} quizzes • Click on any quiz to see details</p>
+          <p>Showing all {quizzes.length} quizzes • Click on any quiz to start immediately</p>
         )}
       </div>
 
@@ -326,25 +334,13 @@ export default function QuizList() {
                             </div>
                           )}
 
-                          <div className="quiz-card-hint">
-                            <span className="hint-icon">👆</span>
-                            <span className="hint-text">Click to see quiz details, statistics & similar quizzes</span>
-                          </div>
                         </div>
 
                         <div className="quiz-actions">
                           <button
-                            onClick={(e) => handleQuickStart(e, quiz.id)}
-                            className="btn btn-primary quiz-action-btn"
-                            title="Start quiz immediately"
-                          >
-                            ⚡ Quick Start
-                          </button>
-                          
-                          <button
-                            onClick={() => handleQuizClick(quiz.id)}
+                            onClick={(e) => handleViewDetails(e, quiz.id)}
                             className="btn btn-outline quiz-detail-btn"
-                            title="View quiz details"
+                            title="View detailed statistics and similar quizzes"
                           >
                             📊 View Details
                           </button>

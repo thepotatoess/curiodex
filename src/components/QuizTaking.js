@@ -112,7 +112,7 @@ export default function QuizTaking() {
 
   const confirmCancel = () => {
     setShowCancelConfirm(false)
-    navigate(`/quiz/${quizId}`)
+    navigate(`/quizzes`)
   }
 
   const submitQuiz = async () => {

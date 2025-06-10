@@ -13,9 +13,11 @@ export default function QuizDetailPage() {
   const [globalStats, setGlobalStats] = useState(null)
   const [similarQuizzes, setSimilarQuizzes] = useState([])
   const [userRanking, setUserRanking] = useState(null)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     if (quizId) {
+      console.log('Loading quiz details for ID:', quizId) // Debug log
       loadQuizDetails()
     }
   }, [quizId])
@@ -24,19 +26,53 @@ export default function QuizDetailPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       
-      // Load quiz details
+      console.log('Fetching quiz with ID:', quizId) // Debug log
+      
+      // Load quiz details - first try without is_published filter to debug
       const { data: quizData, error: quizError } = await supabase
         .from('quizzes')
         .select(`
           *,
-          questions(id, points),
-          profiles!created_by(username, email)
+          questions(id, points)
         `)
         .eq('id', quizId)
-        .eq('is_published', true)
         .single()
 
-      if (quizError) throw quizError
+      console.log('Quiz query result:', { quizData, quizError }) // Debug log
+
+      if (quizError) {
+        console.error('Quiz query error:', quizError)
+        setError(`Database error: ${quizError.message}`)
+        setLoading(false)
+        return
+      }
+
+      if (!quizData) {
+        console.error('No quiz data returned')
+        setError('Quiz not found in database')
+        setLoading(false)
+        return
+      }
+
+      // Check if quiz is published
+      if (!quizData.is_published) {
+        console.error('Quiz is not published:', quizData.is_published)
+        setError('This quiz is not currently available')
+        setLoading(false)
+        return
+      }
+
+      // Get the creator's profile separately if needed
+      let creatorProfile = null
+      if (quizData.created_by) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('username, email')
+          .eq('id', quizData.created_by)
+          .single()
+        
+        creatorProfile = profileData
+      }
       
       // Get category metadata
       const { data: categoryData } = await supabase
@@ -50,9 +86,11 @@ export default function QuizDetailPage() {
         question_count: quizData.questions?.length || 0,
         total_points: quizData.questions?.reduce((sum, q) => sum + q.points, 0) || 0,
         category_icon: categoryData?.icon || '📚',
-        category_color: categoryData?.color || '#6b7280'
+        category_color: categoryData?.color || '#6b7280',
+        creator_profile: creatorProfile
       }
 
+      console.log('Processed quiz data:', quizWithCategory) // Debug log
       setQuiz(quizWithCategory)
 
       // Load user's attempts for this quiz
@@ -69,6 +107,7 @@ export default function QuizDetailPage() {
 
     } catch (error) {
       console.error('Error loading quiz details:', error)
+      setError(`Unexpected error: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -281,11 +320,25 @@ export default function QuizDetailPage() {
 
   if (loading) return <div className="quiz-detail-loading">Loading quiz details...</div>
 
+  if (error) {
+    return (
+      <div className="quiz-detail-not-found">
+        <h2>Error Loading Quiz</h2>
+        <p>{error}</p>
+        <p>Quiz ID: {quizId}</p>
+        <button onClick={() => navigate('/quizzes')} className="btn btn-primary">
+          Back to Quizzes
+        </button>
+      </div>
+    )
+  }
+
   if (!quiz) {
     return (
       <div className="quiz-detail-not-found">
         <h2>Quiz not found</h2>
         <p>The quiz you're looking for doesn't exist or has been removed.</p>
+        <p>Quiz ID: {quizId}</p>
         <button onClick={() => navigate('/quizzes')} className="btn btn-primary">
           Back to Quizzes
         </button>
@@ -333,7 +386,7 @@ export default function QuizDetailPage() {
             </div>
             <div className="meta-item">
               <span className="meta-label">Created by</span>
-              <span className="meta-value">{quiz.profiles?.username || 'Admin'}</span>
+              <span className="meta-value">{quiz.creator_profile?.username || 'Admin'}</span>
             </div>
           </div>
 
