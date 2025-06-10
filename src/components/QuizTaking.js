@@ -14,6 +14,9 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
   const [startTime] = useState(Date.now())
   const [previousBest, setPreviousBest] = useState(null)
   const [isNewRecord, setIsNewRecord] = useState(false)
+  //const [answerLocked, setAnswerLocked] = useState(false)
+  const currentQ = questions[currentQuestion] || null
+  const isAnswered = currentQ ? answers[currentQ.id] !== undefined : false
 
   useEffect(() => {
     const loadQuiz = async () => {
@@ -80,12 +83,14 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
       ...answers,
       [questionId]: answer
     })
+    //setAnswerLocked(true)
   }
 
   const nextQuestion = () => {
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1)
     }
+    //setAnswerLocked(false)
   }
 
   const prevQuestion = () => {
@@ -182,7 +187,6 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
   }
 
   // Quiz Taking Screen
-  const currentQ = questions[currentQuestion]
   const progress = ((currentQuestion + 1) / questions.length) * 100
 
   return (
@@ -249,6 +253,16 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
             )
           })}
         </div>
+
+      
+        
+
+        {isAnswered && currentQ.explanation &&  (
+          <div className="question-description">
+            <p>{currentQ.explanation}</p>
+          </div>
+        )}
+        
 
         <div className="question-points">
           Points: {currentQ.points}
