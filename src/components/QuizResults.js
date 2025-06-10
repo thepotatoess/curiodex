@@ -10,6 +10,7 @@ export default function QuizResults({
   userAnswers, 
   onRetake, 
   onBackToQuizzes,
+  onBackToQuizDetail,
   isNewRecord = false,
   previousBest = null
 }) {
@@ -202,6 +203,15 @@ export default function QuizResults({
         >
           Retake Quiz
         </button>
+
+        {onBackToQuizDetail && (
+          <button
+            onClick={onBackToQuizDetail}
+            className="results-btn results-btn-secondary"
+          >
+            Quiz Details
+          </button>
+        )}
         
         <button
           onClick={onBackToQuizzes}

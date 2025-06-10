@@ -7,6 +7,8 @@ import AdminRoute from './components/admin/AdminRoute'
 import AdminDashboard from './components/admin/AdminDashboard'
 import QuizManager from './components/admin/QuizManager'
 import QuizList from './components/QuizList'
+import QuizDetailPage from './components/QuizDetailPage'
+import QuizTaking from './components/QuizTaking'
 import ManageUsers from './components/admin/ManageUsers'
 import CategoryManager from './components/admin/CategoryManager'
 import QuizStats from './components/QuizStats'
@@ -84,6 +86,8 @@ function AppContent() {
         } />
         
         <Route path="/quizzes" element={<QuizList />} />
+        <Route path="/quiz/:quizId" element={<QuizDetailPage />} />
+        <Route path="/quiz/:quizId/play" element={<QuizTaking />} />
         <Route path="/stats" element={<QuizStats />} />
         <Route path="/admin/users" element={<ManageUsers />} />
         

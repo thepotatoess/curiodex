@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { ConfirmModal } from './ConfirmModal'
+import QuizResults from './QuizResults'
 import '../css/QuizTaking.css'
 
-export default function QuizTaking({ quizId, onComplete, onCancel }) {
+export default function QuizTaking() {
+  const { quizId } = useParams()
+  const navigate = useNavigate()
+  
   const [quiz, setQuiz] = useState(null)
   const [questions, setQuestions] = useState([])
   const [currentQuestion, setCurrentQuestion] = useState(0)
@@ -21,64 +26,66 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
   const isAnswered = currentQ ? answers[currentQ.id] !== undefined : false
 
   useEffect(() => {
-    const loadQuiz = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        
-        const { data: quizData, error: quizError } = await supabase
-          .from('quizzes')
-          .select('*')
-          .eq('id', quizId)
-          .eq('is_published', true)
-          .single()
-
-        if (quizError) throw quizError
-
-        const { data: questionsData, error: questionsError } = await supabase
-          .from('questions')
-          .select('*')
-          .eq('quiz_id', quizId)
-          .order('order_index')
-
-        if (questionsError) throw questionsError
-
-        // Parse options JSON
-        const parsedQuestions = questionsData.map(q => ({
-          ...q,
-          options: JSON.parse(q.options || '[]')
-        }))
-
-        // Fetch user's previous attempts
-        if (user) {
-          const { data: previousAttempts, error: attemptsError } = await supabase
-            .from('user_quiz_attempts')
-            .select('score, max_score')
-            .eq('user_id', user.id)
-            .eq('quiz_id', quizId)
-            .order('score', { ascending: false })
-            .limit(1)
-
-          if (!attemptsError && previousAttempts && previousAttempts.length > 0) {
-            const bestAttempt = previousAttempts[0]
-            setPreviousBest({
-              score: bestAttempt.score,
-              maxScore: bestAttempt.max_score,
-              percentage: Math.round((bestAttempt.score / bestAttempt.max_score) * 100)
-            })
-          }
-        }
-
-        setQuiz(quizData)
-        setQuestions(parsedQuestions)
-      } catch (error) {
-        console.error('Error loading quiz:', error)
-      } finally {
-        setLoading(false)
-      }
+    if (quizId) {
+      loadQuiz()
     }
-
-    loadQuiz()
   }, [quizId])
+
+  const loadQuiz = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      const { data: quizData, error: quizError } = await supabase
+        .from('quizzes')
+        .select('*')
+        .eq('id', quizId)
+        .eq('is_published', true)
+        .single()
+
+      if (quizError) throw quizError
+
+      const { data: questionsData, error: questionsError } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('quiz_id', quizId)
+        .order('order_index')
+
+      if (questionsError) throw questionsError
+
+      // Parse options JSON
+      const parsedQuestions = questionsData.map(q => ({
+        ...q,
+        options: JSON.parse(q.options || '[]')
+      }))
+
+      // Fetch user's previous attempts
+      if (user) {
+        const { data: previousAttempts, error: attemptsError } = await supabase
+          .from('user_quiz_attempts')
+          .select('score, max_score')
+          .eq('user_id', user.id)
+          .eq('quiz_id', quizId)
+          .order('score', { ascending: false })
+          .limit(1)
+
+        if (!attemptsError && previousAttempts && previousAttempts.length > 0) {
+          const bestAttempt = previousAttempts[0]
+          setPreviousBest({
+            score: bestAttempt.score,
+            maxScore: bestAttempt.max_score,
+            percentage: Math.round((bestAttempt.score / bestAttempt.max_score) * 100)
+          })
+        }
+      }
+
+      setQuiz(quizData)
+      setQuestions(parsedQuestions)
+    } catch (error) {
+      console.error('Error loading quiz:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleAnswer = (questionId, answer) => {
     setAnswers({
@@ -100,13 +107,12 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
   }
 
   const handleCancelClick = () => {
-    // Always show confirmation modal for now (for testing)
     setShowCancelConfirm(true)
   }
 
   const confirmCancel = () => {
     setShowCancelConfirm(false)
-    onCancel()
+    navigate(`/quiz/${quizId}`)
   }
 
   const submitQuiz = async () => {
@@ -153,23 +159,14 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
         score,
         maxScore,
         timeTaken,
-        userAnswers: answers,
-        percentage: Math.round((score / maxScore) * 100)
-      })
-      setShowResults(true)
-
-      // Call onComplete to show results in parent component
-      onComplete({
-        score,
-        maxScore,
-        timeTaken,
         quizTitle: quiz.title,
         questions,
         userAnswers: answers,
         isNewRecord,
         previousBest,
-        quizId // Add this for retake functionality
+        quizId
       })
+      setShowResults(true)
 
     } catch (error) {
       console.error('Error submitting quiz:', error)
@@ -178,22 +175,48 @@ export default function QuizTaking({ quizId, onComplete, onCancel }) {
     }
   }
 
+  const handleRetakeQuiz = () => {
+    // Reset quiz state
+    setCurrentQuestion(0)
+    setAnswers({})
+    setShowResults(false)
+    setResults(null)
+    setIsNewRecord(false)
+    // Update start time for new attempt
+    window.location.reload() // Simple way to reset the start time
+  }
+
+  const handleBackToQuizDetail = () => {
+    navigate(`/quiz/${quizId}`)
+  }
+
+  const handleBackToQuizzes = () => {
+    navigate('/quizzes')
+  }
+
   if (loading) return <div className="quiz-loading">Loading quiz...</div>
 
   if (!quiz || questions.length === 0) {
     return (
       <div className="quiz-not-found">
         <h2>Quiz not found or has no questions</h2>
-        <button onClick={onCancel} className="quiz-not-found-btn">
+        <button onClick={() => navigate('/quizzes')} className="quiz-not-found-btn">
           Back to Quizzes
         </button>
       </div>
     )
   }
 
-  // Don't show results here - let parent component handle it
-  if (showResults) {
-    return null
+  // Show results
+  if (showResults && results) {
+    return (
+      <QuizResults
+        {...results}
+        onRetake={handleRetakeQuiz}
+        onBackToQuizzes={handleBackToQuizzes}
+        onBackToQuizDetail={handleBackToQuizDetail}
+      />
+    )
   }
 
   // Quiz Taking Screen

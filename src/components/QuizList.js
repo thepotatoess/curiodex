@@ -1,15 +1,13 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import QuizTaking from './QuizTaking'
-import QuizResults from './QuizResults'
 import '../css/QuizList.css'
 
 export default function QuizList() {
+  const navigate = useNavigate()
   const [quizzes, setQuizzes] = useState([])
   const [loading, setLoading] = useState(true)
-  const [takingQuiz, setTakingQuiz] = useState(null)
   const [userAttempts, setUserAttempts] = useState([])
-  const [quizResults, setQuizResults] = useState(null)
   
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState('')
@@ -87,29 +85,13 @@ export default function QuizList() {
     }
   }
 
-  const startQuiz = (quizId) => {
-    setTakingQuiz(quizId)
-    setQuizResults(null)
+  const handleQuizClick = (quizId) => {
+    navigate(`/quiz/${quizId}`)
   }
 
-  const finishQuiz = (results = null) => {
-    if (results) {
-      setQuizResults(results)
-    }
-    setTakingQuiz(null)
-    loadQuizzes()
-    loadUserAttempts()
-  }
-
-  const handleRetakeQuiz = () => {
-    if (quizResults && quizResults.quizId) {
-      setQuizResults(null)
-      setTakingQuiz(quizResults.quizId)
-    }
-  }
-
-  const handleBackToQuizzes = () => {
-    setQuizResults(null)
+  const handleQuickStart = (e, quizId) => {
+    e.stopPropagation() // Prevent the card click event
+    navigate(`/quiz/${quizId}/play`)
   }
 
   const getUserBestScore = (quizId) => {
@@ -174,27 +156,7 @@ export default function QuizList() {
     
     const randomIndex = Math.floor(Math.random() * filteredQuizzes.length)
     const randomQuiz = filteredQuizzes[randomIndex]
-    startQuiz(randomQuiz.id)
-  }
-
-  if (takingQuiz) {
-    return (
-      <QuizTaking
-        quizId={takingQuiz}
-        onComplete={finishQuiz}
-        onCancel={() => finishQuiz()}
-      />
-    )
-  }
-
-  if (quizResults) {
-    return (
-      <QuizResults
-        {...quizResults}
-        onRetake={handleRetakeQuiz}
-        onBackToQuizzes={handleBackToQuizzes}
-      />
-    )
+    navigate(`/quiz/${randomQuiz.id}/play`)
   }
 
   if (loading) return <div className="quiz-loading">Loading quizzes...</div>
@@ -297,7 +259,7 @@ export default function QuizList() {
             {selectedPlayedStatus !== 'all' && <span> ({selectedPlayedStatus})</span>}
           </p>
         ) : (
-          <p>Showing all {quizzes.length} quizzes</p>
+          <p>Showing all {quizzes.length} quizzes • Click on any quiz to see details</p>
         )}
       </div>
 
@@ -332,7 +294,11 @@ export default function QuizList() {
                 {quizzes.map(quiz => {
                   const userBest = getUserBestScore(quiz.id)
                   return (
-                    <div key={quiz.id} className="quiz-card">
+                    <div 
+                      key={quiz.id} 
+                      className="quiz-card quiz-card-clickable"
+                      onClick={() => handleQuizClick(quiz.id)}
+                    >
                       <div className="quiz-card-content">
                         <div className="quiz-info">
                           <h3 className="quiz-title">{quiz.title}</h3>
@@ -359,14 +325,30 @@ export default function QuizList() {
                               | <strong>Attempts:</strong> {userBest.attempts}
                             </div>
                           )}
+
+                          <div className="quiz-card-hint">
+                            <span className="hint-icon">👆</span>
+                            <span className="hint-text">Click to see quiz details, statistics & similar quizzes</span>
+                          </div>
                         </div>
 
-                        <button
-                          onClick={() => startQuiz(quiz.id)}
-                          className="btn btn-primary quiz-action-btn"
-                        >
-                          {userBest ? 'Play again' : 'Start Quiz'}
-                        </button>
+                        <div className="quiz-actions">
+                          <button
+                            onClick={(e) => handleQuickStart(e, quiz.id)}
+                            className="btn btn-primary quiz-action-btn"
+                            title="Start quiz immediately"
+                          >
+                            ⚡ Quick Start
+                          </button>
+                          
+                          <button
+                            onClick={() => handleQuizClick(quiz.id)}
+                            className="btn btn-outline quiz-detail-btn"
+                            title="View quiz details"
+                          >
+                            📊 View Details
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )
