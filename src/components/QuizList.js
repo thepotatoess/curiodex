@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import QuizTaking from './QuizTaking'
+import QuizResults from './QuizResults'
+import '../css/QuizList.css'
 
 export default function QuizList() {
   const [quizzes, setQuizzes] = useState([])
   const [loading, setLoading] = useState(true)
   const [takingQuiz, setTakingQuiz] = useState(null)
   const [userAttempts, setUserAttempts] = useState([])
-
+  const [quizResults, setQuizResults] = useState(null)
   useEffect(() => {
     loadQuizzes()
     loadUserAttempts()
@@ -66,12 +68,27 @@ export default function QuizList() {
 
   const startQuiz = (quizId) => {
     setTakingQuiz(quizId)
+    setQuizResults(null)
   }
 
-  const finishQuiz = () => {
+  const finishQuiz = (results = null) => {
+    if (results) {
+      setQuizResults(results)
+    }
     setTakingQuiz(null)
     loadQuizzes() // Refresh to update attempt counts
     loadUserAttempts() // Refresh user attempts
+  }
+
+  const handleRetakeQuiz = () => {
+    if (quizResults && quizResults.quizId) {
+      setQuizResults(null)
+      setTakingQuiz(quizResults.quizId)
+    }
+  }
+
+  const handleBackToQuizzes = () => {
+    setQuizResults(null)
   }
 
   const getUserBestScore = (quizId) => {
@@ -95,49 +112,65 @@ export default function QuizList() {
       <QuizTaking
         quizId={takingQuiz}
         onComplete={finishQuiz}
-        onCancel={finishQuiz}
+        onCancel={() => finishQuiz()}
       />
     )
   }
 
-  if (loading) return <div style={{ padding: '20px' }}>Loading quizzes...</div>
+  if (quizResults) {
+    return (
+      <QuizResults
+        {...quizResults}
+        onRetake={handleRetakeQuiz}
+        onBackToQuizzes={handleBackToQuizzes}
+      />
+    )
+  }
+
+  if (loading) return <div className="quiz-loading">Loading quizzes...</div>
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto' }}>
-      <h1>Available Quizzes</h1>
+    <div className="quiz-list-container">
+      <h1 className="quiz-list-title">Available Quizzes</h1>
       
       {quizzes.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>
+        <div className="quiz-empty-state">
           <h3>No quizzes available yet</h3>
           <p>Check back later for new quizzes!</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: '20px' }}>
+        <div className="quiz-grid">
           {quizzes.map(quiz => {
             const userBest = getUserBestScore(quiz.id)
             
             return (
-              <div key={quiz.id} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '20px', backgroundColor: '#f8f9fa' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                  <div style={{ flex: 1 }}>
-                    <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>{quiz.title}</h3>
-                    <p style={{ margin: '0 0 15px 0', color: '#666' }}>{quiz.description}</p>
+              <div key={quiz.id} className="quiz-card">
+                <div className="quiz-card-content">
+                  <div className="quiz-info">
+                    <h3 className="quiz-title">{quiz.title}</h3>
+                    <p className="quiz-description">{quiz.description}</p>
                     
-                    <div style={{ display: 'flex', gap: '20px', fontSize: '14px', color: '#666', marginBottom: '10px' }}>
-                      <span style={{ textTransform: 'capitalize' }}><strong>Category:</strong> {quiz.category}</span>
-                      <span style={{ textTransform: 'capitalize' }}><strong>Difficulty:</strong> {quiz.difficulty}</span>
-                      <span style={{ textTransform: 'capitalize' }}><strong>Questions:</strong> {quiz.question_count}</span>
-                      <span style={{ textTransform: 'capitalize' }}><strong>Times taken:</strong> {quiz.total_attempts}</span>
+                    <div className="quiz-meta">
+                      <span className="quiz-meta-item">
+                        <strong>Category:</strong>
+                        <span className="quiz-meta-value">{quiz.category}</span>
+                      </span>
+                      <span className="quiz-meta-item">
+                        <strong>Difficulty:</strong>
+                        <span className="quiz-meta-value">{quiz.difficulty}</span>
+                      </span>
+                      <span className="quiz-meta-item">
+                        <strong>Questions:</strong>
+                        <span className="quiz-meta-value">{quiz.question_count}</span>
+                      </span>
+                      <span className="quiz-meta-item">
+                        <strong>Times taken:</strong>
+                        <span className="quiz-meta-value">{quiz.total_attempts}</span>
+                      </span>
                     </div>
 
                     {userBest && (
-                      <div style={{ 
-                        backgroundColor: '#e3f2fd', 
-                        padding: '10px', 
-                        borderRadius: '4px', 
-                        fontSize: '14px',
-                        marginBottom: '10px'
-                      }}>
+                      <div className="user-score-box">
                         <strong>Your Best Score:</strong> {userBest.score}/{userBest.maxScore} ({userBest.percentage}%) 
                         | <strong>Attempts:</strong> {userBest.attempts}
                       </div>
@@ -146,16 +179,7 @@ export default function QuizList() {
                   
                   <button 
                     onClick={() => startQuiz(quiz.id)}
-                    style={{ 
-                      padding: '12px 24px', 
-                      backgroundColor: '#007bff', 
-                      color: 'white', 
-                      border: 'none', 
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      fontWeight: 'bold'
-                    }}
+                    className="btn btn-primary quiz-action-btn"
                   >
                     {userBest ? 'Play again' : 'Start Quiz'}
                   </button>

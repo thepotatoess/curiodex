@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import '../../css/AdminDashboard.css'
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -86,58 +87,54 @@ export default function AdminDashboard() {
     return '#ef4444'
   }
 
-  if (loading) return <div style={{ padding: '20px' }}>Loading dashboard...</div>
+  if (loading) return <div className="admin-loading">Loading dashboard...</div>
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>Admin Dashboard</h1>
+    <div className="admin-dashboard-container">
+      <h1 className="admin-dashboard-title">Admin Dashboard</h1>
       
       {/* Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '40px' }}>
-        <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '20px', textAlign: 'center' }}>
+      <div className="admin-stats-grid">
+        <div className="stat-card">
           <h3>Total Users</h3>
-          <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#007bff' }}>{stats.totalUsers}</div>
+          <div className="stat-card-value users">{stats.totalUsers}</div>
         </div>
-        <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '20px', textAlign: 'center' }}>
+        <div className="stat-card">
           <h3>Total Quizzes</h3>
-          <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#28a745' }}>{stats.totalQuizzes}</div>
+          <div className="stat-card-value quizzes">{stats.totalQuizzes}</div>
         </div>
-        <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '20px', textAlign: 'center' }}>
+        <div className="stat-card">
           <h3>Total Attempts</h3>
-          <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#17a2b8' }}>{stats.totalAttempts}</div>
+          <div className="stat-card-value attempts">{stats.totalAttempts}</div>
         </div>
       </div>
 
       {/* Recent Quiz Attempts */}
-      <div style={{ marginBottom: '40px' }}>
-        <h2>Recent Quiz Attempts</h2>
-        <p style={{ color: '#666', marginBottom: '20px' }}>
-          Recent quiz attempts (showing all for debugging)
-        </p>
+      <div className="recent-attempts-section">
+        <div className="section-header">
+          <h2>Recent Quiz Attempts</h2>
+          <p className="section-description">
+            Recent quiz attempts (showing all for debugging)
+          </p>
+        </div>
         
         {recentAttempts.length === 0 ? (
-          <div style={{ 
-            border: '1px solid #ddd', 
-            borderRadius: '8px', 
-            padding: '40px', 
-            textAlign: 'center',
-            backgroundColor: '#f8f9fa'
-          }}>
-            <p style={{ margin: 0, color: '#666' }}>
+          <div className="attempts-empty-state">
+            <p>
               No quiz attempts found. Take a quiz to see attempts appear here!
             </p>
           </div>
         ) : (
-          <div style={{ border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="attempts-table-container">
+            <table className="attempts-table">
               <thead>
-                <tr style={{ backgroundColor: '#f8f9fa' }}>
-                  <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #ddd' }}>User</th>
-                  <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Quiz</th>
-                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid #ddd' }}>Score</th>
-                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid #ddd' }}>Percentage</th>
-                  <th style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid #ddd' }}>Time</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid #ddd' }}>When</th>
+                <tr>
+                  <th>User</th>
+                  <th>Quiz</th>
+                  <th className="text-center">Score</th>
+                  <th className="text-center">Percentage</th>
+                  <th className="text-center">Time</th>
+                  <th className="text-right">When</th>
                 </tr>
               </thead>
               <tbody>
@@ -147,31 +144,30 @@ export default function AdminDashboard() {
                   const seconds = attempt.time_taken % 60
                   
                   return (
-                    <tr key={attempt.id} style={{ 
-                      backgroundColor: index % 2 === 0 ? 'white' : '#f8f9fa',
-                      borderBottom: '1px solid #eee'
-                    }}>
-                      <td style={{ padding: '12px' }}>
+                    <tr key={attempt.id}>
+                      <td>
                         {attempt.profiles?.email || attempt.profiles?.username || 'Unknown User'}
                       </td>
-                      <td style={{ padding: '12px' }}>
+                      <td>
                         {attempt.quizzes?.title || 'Unknown Quiz'}
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'center' }}>
-                        {attempt.score}/{attempt.max_score}
+                      <td className="text-center">
+                        <span className="score-display">
+                          {attempt.score}/{attempt.max_score}
+                        </span>
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'center' }}>
-                        <span style={{ 
-                          color: getScoreColor(attempt.score, attempt.max_score),
-                          fontWeight: 'bold'
-                        }}>
+                      <td className="text-center">
+                        <span 
+                          className="score-percentage"
+                          style={{ color: getScoreColor(attempt.score, attempt.max_score) }}
+                        >
                           {percentage}%
                         </span>
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'center' }}>
+                      <td className="text-center">
                         {minutes}:{seconds.toString().padStart(2, '0')}
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right', color: '#666', fontSize: '14px' }}>
+                      <td className="text-right time-display">
                         {formatTimeAgo(attempt.completed_at || attempt.created_at)}
                       </td>
                     </tr>
@@ -184,57 +180,29 @@ export default function AdminDashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div>
+      <div className="quick-actions-section">
         <h2>Quick Actions</h2>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <div className="quick-actions-grid">
           <button 
             onClick={() => window.location.href = '/admin/quizzes'}
-            style={{ 
-              padding: '10px 20px', 
-              backgroundColor: '#007bff', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
+            className="quick-action-btn quizzes"
           >
             Manage Quizzes
           </button>
           <button 
             onClick={() => window.location.href = '/admin/users'}
-            style={{ 
-              padding: '10px 20px', 
-              backgroundColor: '#28a745', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
+            className="quick-action-btn users"
           >
             Manage Users
           </button>
           <button 
             onClick={() => window.location.href = '/admin/categories'}
-            style={{ 
-              padding: '10px 20px', 
-              backgroundColor: '#f59e0b', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
+            className="quick-action-btn categories"
           >
             Manage Categories
           </button>
           <button 
-            style={{ 
-              padding: '10px 20px', 
-              backgroundColor: '#17a2b8', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
+            className="quick-action-btn analytics"
           >
             View Analytics
           </button>

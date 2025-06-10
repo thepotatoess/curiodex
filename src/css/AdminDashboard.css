@@ -1,0 +1,262 @@
+/* ========== Admin Dashboard Container ========== */
+.admin-dashboard-container {
+  padding: var(--spacing-lg);
+}
+
+.admin-dashboard-title {
+  font-size: 32px;
+  font-weight: bold;
+  color: var(--gray-900);
+  margin-bottom: var(--spacing-xl);
+}
+
+/* ========== Stats Cards Grid ========== */
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: 40px;
+}
+
+/* ========== Stat Card ========== */
+.stat-card {
+  background-color: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.stat-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--gray-700);
+  margin: 0 0 var(--spacing-md) 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-card-value {
+  font-size: 36px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.stat-card-value.users {
+  color: var(--primary-color);
+}
+
+.stat-card-value.quizzes {
+  color: var(--success-color);
+}
+
+.stat-card-value.attempts {
+  color: var(--info-color);
+}
+
+/* ========== Recent Attempts Section ========== */
+.recent-attempts-section {
+  margin-bottom: 40px;
+}
+
+.section-header {
+  margin-bottom: var(--spacing-lg);
+}
+
+.section-header h2 {
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--gray-900);
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.section-description {
+  color: var(--gray-600);
+  margin: 0;
+}
+
+/* ========== Recent Attempts Table ========== */
+.attempts-table-container {
+  background-color: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.attempts-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.attempts-table th {
+  background-color: var(--gray-50);
+  padding: var(--spacing-md);
+  text-align: left;
+  font-weight: 600;
+  color: var(--gray-700);
+  border-bottom: 1px solid var(--gray-200);
+  font-size: 14px;
+}
+
+.attempts-table th.text-center {
+  text-align: center;
+}
+
+.attempts-table th.text-right {
+  text-align: right;
+}
+
+.attempts-table td {
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--gray-100);
+  font-size: 14px;
+}
+
+.attempts-table td.text-center {
+  text-align: center;
+}
+
+.attempts-table td.text-right {
+  text-align: right;
+}
+
+.attempts-table tr:hover {
+  background-color: var(--gray-50);
+}
+
+.attempts-table tbody tr:nth-child(even) {
+  background-color: var(--gray-50);
+}
+
+.attempts-table tbody tr:nth-child(even):hover {
+  background-color: var(--gray-100);
+}
+
+/* ========== Score Display ========== */
+.score-display {
+  font-weight: bold;
+}
+
+.score-percentage {
+  font-weight: bold;
+  font-size: 16px;
+}
+
+/* ========== Time Display ========== */
+.time-display {
+  color: var(--gray-600);
+  font-size: 14px;
+}
+
+/* ========== Empty State for Table ========== */
+.attempts-empty-state {
+  background-color: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  padding: 40px;
+  text-align: center;
+}
+
+.attempts-empty-state p {
+  margin: 0;
+  color: var(--gray-600);
+}
+
+/* ========== Quick Actions Section ========== */
+.quick-actions-section h2 {
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--gray-900);
+  margin: 0 0 var(--spacing-lg) 0;
+}
+
+.quick-actions-grid {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.quick-action-btn {
+  padding: 10px 20px;
+  font-size: 16px;
+  font-weight: 500;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: white;
+}
+
+.quick-action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.quick-action-btn.quizzes {
+  background-color: var(--primary-color);
+}
+
+.quick-action-btn.quizzes:hover {
+  background-color: var(--primary-hover);
+}
+
+.quick-action-btn.users {
+  background-color: var(--success-color);
+}
+
+.quick-action-btn.users:hover {
+  background-color: var(--success-hover);
+}
+
+.quick-action-btn.categories {
+  background-color: var(--warning-color);
+}
+
+.quick-action-btn.categories:hover {
+  background-color: #e0a800;
+}
+
+.quick-action-btn.analytics {
+  background-color: var(--info-color);
+}
+
+.quick-action-btn.analytics:hover {
+  background-color: #138496;
+}
+
+/* ========== Loading State ========== */
+.admin-loading {
+  padding: var(--spacing-lg);
+  text-align: center;
+  color: var(--gray-600);
+}
+
+/* ========== Responsive ========== */
+@media (max-width: 768px) {
+  .admin-dashboard-container {
+    padding: var(--spacing-md);
+  }
+  
+  .admin-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .attempts-table {
+    font-size: 12px;
+  }
+  
+  .attempts-table th,
+  .attempts-table td {
+    padding: var(--spacing-sm);
+  }
+  
+  .stat-card-value {
+    font-size: 28px;
+  }
+}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
+import '../css/Auth.css'
 
 export default function Auth() {
   const { signIn, signUp } = useAuth()
@@ -44,59 +45,74 @@ export default function Auth() {
   }
 
   return (
-    <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px' }}>
-      <h2>{isSignUp ? 'Sign Up' : 'Sign In'}</h2>
-      <form onSubmit={handleSubmit}>
-        {isSignUp && (
-          <input
-            type="text"
-            placeholder="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-            style={{ width: '100%', padding: '10px', margin: '5px 0', borderRadius: '4px', border: '1px solid #ddd' }}
-          />
-        )}
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          style={{ width: '100%', padding: '10px', margin: '5px 0', borderRadius: '4px', border: '1px solid #ddd' }}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          style={{ width: '100%', padding: '10px', margin: '5px 0', borderRadius: '4px', border: '1px solid #ddd' }}
-        />
-        <button type="submit" style={{ width: '100%', padding: '10px', margin: '10px 0', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>
-          {isSignUp ? 'Sign Up' : 'Sign In'}
-        </button>
-      </form>
-      
-      {error && (
-        <div>
-          <p style={{color: 'red'}}>{error}</p>
-          {error.includes('Email not confirmed') && (
-            <button onClick={resendConfirmation} style={{ padding: '5px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px' }}>
-              Resend Confirmation Email
-            </button>
+    <div className="auth-container">
+      <div className="auth-card">
+        <h2 className="auth-title">{isSignUp ? 'Sign Up' : 'Sign In'}</h2>
+        
+        <form onSubmit={handleSubmit} className="auth-form">
+          {isSignUp && (
+            <div className="auth-input-group">
+              <input
+                type="text"
+                placeholder="Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                className="form-input"
+              />
+            </div>
           )}
-        </div>
-      )}
-      
-      {message && <p style={{color: 'green'}}>{message}</p>}
-      
-      <button 
-        onClick={() => setIsSignUp(!isSignUp)}
-        style={{ width: '100%', padding: '10px', margin: '10px 0', backgroundColor: 'transparent', border: '1px solid #ddd', borderRadius: '4px' }}
-      >
-        {isSignUp ? 'Already have an account?' : 'Need an account?'}
-      </button>
+          
+          <div className="auth-input-group">
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="form-input"
+            />
+          </div>
+          
+          <div className="auth-input-group">
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="form-input"
+            />
+          </div>
+          
+          <button type="submit" className="btn btn-primary auth-submit-btn">
+            {isSignUp ? 'Sign Up' : 'Sign In'}
+          </button>
+        </form>
+        
+        {error && (
+          <div className="auth-error">
+            <p>{error}</p>
+            {error.includes('Email not confirmed') && (
+              <button 
+                onClick={resendConfirmation} 
+                className="btn btn-success auth-resend-btn"
+              >
+                Resend Confirmation Email
+              </button>
+            )}
+          </div>
+        )}
+        
+        {message && <p className="auth-success">{message}</p>}
+        
+        <button 
+          onClick={() => setIsSignUp(!isSignUp)}
+          className="auth-toggle-btn"
+        >
+          {isSignUp ? 'Already have an account?' : 'Need an account?'}
+        </button>
+      </div>
     </div>
   )
 }

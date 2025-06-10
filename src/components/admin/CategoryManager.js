@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import '../../CategoryManager.css'
+import '../../css/CategoryManager.css'
 
 export default function CategoryManager() {
   console.log("Component is rendering")

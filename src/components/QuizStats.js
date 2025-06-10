@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import '../QuizStats.css'
+import '../css/QuizStats.css'
 
 export default function QuizStats() {
   const [stats, setStats] = useState(null)

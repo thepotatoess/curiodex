@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import '../css/QuizResults.css'
 
 export default function QuizResults({ 
   score, 
@@ -8,7 +9,9 @@ export default function QuizResults({
   questions, 
   userAnswers, 
   onRetake, 
-  onBackToQuizzes 
+  onBackToQuizzes,
+  isNewRecord = false,
+  previousBest = null
 }) {
   const [showConfetti, setShowConfetti] = useState(true)
   const percentage = Math.round((score / maxScore) * 100)
@@ -24,36 +27,31 @@ export default function QuizResults({
       emoji: '🎉',
       title: 'Outstanding!',
       message: 'You absolutely nailed it!',
-      color: '#10b981',
-      bgColor: '#ecfdf5'
+      level: 'excellent'
     }
     if (percentage >= 80) return {
       emoji: '🌟',
       title: 'Excellent!',
       message: 'Great job on this quiz!',
-      color: '#3b82f6',
-      bgColor: '#eff6ff'
+      level: 'good'
     }
     if (percentage >= 70) return {
       emoji: '👏',
       title: 'Well Done!',
       message: 'You did really well!',
-      color: '#8b5cf6',
-      bgColor: '#f3e8ff'
+      level: 'medium'
     }
     if (percentage >= 60) return {
       emoji: '👍',
       title: 'Good Job!',
       message: 'Solid performance!',
-      color: '#f59e0b',
-      bgColor: '#fffbeb'
+      level: 'fair'
     }
     return {
       emoji: '📚',
       title: 'Keep Learning!',
       message: 'Practice makes perfect!',
-      color: '#ef4444',
-      bgColor: '#fef2f2'
+      level: 'poor'
     }
   }
 
@@ -65,133 +63,86 @@ export default function QuizResults({
   const incorrectAnswers = questions.length - correctAnswers
 
   return (
-    <div style={{ 
-      maxWidth: '800px', 
-      margin: '0 auto', 
-      padding: '20px',
-      position: 'relative'
-    }}>
+    <div className="results-container">
       {/* Confetti Effect */}
-      {showConfetti && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: '200px',
-          background: `
-            radial-gradient(circle at 20% 80%, #fbbf24 0%, transparent 50%),
-            radial-gradient(circle at 80% 20%, #10b981 0%, transparent 50%),
-            radial-gradient(circle at 40% 40%, #3b82f6 0%, transparent 50%)
-          `,
-          animation: 'confetti 3s ease-out',
-          pointerEvents: 'none',
-          zIndex: 1
-        }} />
+      {showConfetti && percentage >= 70 && (
+        <div className="confetti-overlay" />
       )}
 
       {/* Main Results Card */}
-      <div style={{
-        backgroundColor: performance.bgColor,
-        border: `2px solid ${performance.color}`,
-        borderRadius: '16px',
-        padding: '40px',
-        textAlign: 'center',
-        marginBottom: '30px',
-        position: 'relative',
-        zIndex: 2
-      }}>
-        <div style={{ fontSize: '64px', marginBottom: '16px' }}>
+      <div className={`results-card ${performance.level}`}>
+        {isNewRecord && (
+          <div className="new-record-badge">
+            🏆 NEW PERSONAL BEST! 🏆
+          </div>
+        )}
+
+        <div className="results-emoji">
           {performance.emoji}
         </div>
         
-        <h1 style={{ 
-          fontSize: '32px', 
-          margin: '0 0 8px 0', 
-          color: performance.color,
-          fontWeight: 'bold'
-        }}>
+        <h1 className="results-title">
           {performance.title}
         </h1>
         
-        <p style={{ 
-          fontSize: '18px', 
-          margin: '0 0 24px 0', 
-          color: '#6b7280' 
-        }}>
-          {performance.message}
+        <p className="results-message">
+          {isNewRecord ? 'You beat your previous best score!' : performance.message}
         </p>
 
-        <div style={{ 
-          fontSize: '48px', 
-          fontWeight: 'bold', 
-          color: performance.color,
-          marginBottom: '8px'
-        }}>
+        <div className="results-score">
           {percentage}%
         </div>
         
-        <div style={{ 
-          fontSize: '18px', 
-          color: '#6b7280' 
-        }}>
+        <div className="results-points">
           {score} out of {maxScore} points
         </div>
+
+        {previousBest && !isNewRecord && (
+          <div className="previous-best">
+            Previous best: {previousBest.percentage}%
+          </div>
+        )}
       </div>
 
       {/* Quiz Details */}
-      <div style={{
-        backgroundColor: 'white',
-        border: '1px solid #e5e7eb',
-        borderRadius: '12px',
-        padding: '24px',
-        marginBottom: '30px'
-      }}>
-        <h2 style={{ 
-          fontSize: '20px', 
-          margin: '0 0 20px 0', 
-          color: '#111827' 
-        }}>
+      <div className="quiz-details-card">
+        <h2 className="quiz-details-title">
           Quiz: {quizTitle}
         </h2>
 
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-          gap: '20px' 
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10b981' }}>
+        <div className="results-stats-grid">
+          <div className="stat-item">
+            <div className="stat-value correct">
               {correctAnswers}
             </div>
-            <div style={{ fontSize: '14px', color: '#6b7280' }}>
+            <div className="stat-label">
               Correct Answers
             </div>
           </div>
           
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ef4444' }}>
+          <div className="stat-item">
+            <div className="stat-value incorrect">
               {incorrectAnswers}
             </div>
-            <div style={{ fontSize: '14px', color: '#6b7280' }}>
+            <div className="stat-label">
               Incorrect Answers
             </div>
           </div>
           
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3b82f6' }}>
+          <div className="stat-item">
+            <div className="stat-value time">
               {minutes}:{seconds.toString().padStart(2, '0')}
             </div>
-            <div style={{ fontSize: '14px', color: '#6b7280' }}>
+            <div className="stat-label">
               Time Taken
             </div>
           </div>
           
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#8b5cf6' }}>
+          <div className="stat-item">
+            <div className="stat-value total">
               {questions.length}
             </div>
-            <div style={{ fontSize: '14px', color: '#6b7280' }}>
+            <div className="stat-label">
               Total Questions
             </div>
           </div>
@@ -199,68 +150,40 @@ export default function QuizResults({
       </div>
 
       {/* Question Review */}
-      <div style={{
-        backgroundColor: 'white',
-        border: '1px solid #e5e7eb',
-        borderRadius: '12px',
-        padding: '24px',
-        marginBottom: '30px'
-      }}>
-        <h3 style={{ 
-          fontSize: '18px', 
-          margin: '0 0 20px 0', 
-          color: '#111827' 
-        }}>
+      <div className="question-review-section">
+        <h3 className="question-review-title">
           Question Review
         </h3>
         
-        <div style={{ display: 'grid', gap: '16px' }}>
+        <div className="question-review-grid">
           {questions.map((question, index) => {
             const userAnswer = userAnswers[question.id]
             const isCorrect = userAnswer === question.correct_answer
             
             return (
-              <div key={question.id} style={{
-                padding: '16px',
-                border: `2px solid ${isCorrect ? '#10b981' : '#ef4444'}`,
-                borderRadius: '8px',
-                backgroundColor: isCorrect ? '#f0fdf4' : '#fef2f2'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                  <span style={{ 
-                    fontSize: '20px', 
-                    marginRight: '8px' 
-                  }}>
+              <div key={question.id} className={`review-item ${isCorrect ? 'correct' : 'incorrect'}`}>
+                <div className="review-header">
+                  <span className="review-icon">
                     {isCorrect ? '✅' : '❌'}
                   </span>
-                  <span style={{ fontWeight: 'bold', color: '#111827' }}>
+                  <span className="review-question-number">
                     Question {index + 1}
                   </span>
                 </div>
                 
-                <p style={{ 
-                  margin: '0 0 12px 0', 
-                  color: '#374151',
-                  fontSize: '14px'
-                }}>
+                <p className="review-question-text">
                   {question.question_text}
                 </p>
                 
-                <div style={{ fontSize: '13px' }}>
-                  <div style={{ marginBottom: '4px' }}>
+                <div className="review-answers">
+                  <div className="review-answer-row">
                     <strong>Your answer:</strong> {userAnswer || 'No answer'}
                   </div>
-                  <div style={{ marginBottom: '4px' }}>
+                  <div className="review-answer-row">
                     <strong>Correct answer:</strong> {question.correct_answer}
                   </div>
                   {question.explanation && (
-                    <div style={{ 
-                      marginTop: '8px', 
-                      padding: '8px', 
-                      backgroundColor: '#f9fafb', 
-                      borderRadius: '4px',
-                      color: '#6b7280'
-                    }}>
+                    <div className="review-explanation">
                       <strong>Explanation:</strong> {question.explanation}
                     </div>
                   )}
@@ -272,42 +195,17 @@ export default function QuizResults({
       </div>
 
       {/* Action Buttons */}
-      <div style={{ 
-        display: 'flex', 
-        gap: '16px', 
-        justifyContent: 'center',
-        flexWrap: 'wrap'
-      }}>
+      <div className="results-actions">
         <button
           onClick={onRetake}
-          style={{
-            padding: '12px 24px',
-            backgroundColor: '#3b82f6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '16px',
-            fontWeight: '500',
-            cursor: 'pointer',
-            minWidth: '140px'
-          }}
+          className="results-btn results-btn-primary"
         >
           Retake Quiz
         </button>
         
         <button
           onClick={onBackToQuizzes}
-          style={{
-            padding: '12px 24px',
-            backgroundColor: '#6b7280',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '16px',
-            fontWeight: '500',
-            cursor: 'pointer',
-            minWidth: '140px'
-          }}
+          className="results-btn results-btn-secondary"
         >
           Back to Quizzes
         </button>
