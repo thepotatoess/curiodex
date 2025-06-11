@@ -1,77 +1,162 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 import '../css/Homepage.css'
 
 export default function HomePage() {
-  const [currentFeature, setCurrentFeature] = useState(0)
   const [stats, setStats] = useState({
     quizzes: 0,
     attempts: 0,
     users: 0
   })
+  const [categories, setCategories] = useState([])
+  const [demoQuestion, setDemoQuestion] = useState(0)
+  const [selectedDemoAnswer, setSelectedDemoAnswer] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Mock stats animation on load
-  useEffect(() => {
-    const animateStats = () => {
-      const targets = { quizzes: 25, attempts: 1247, users: 89 }
-      const duration = 2000
-      const steps = 50
-      const stepTime = duration / steps
-
-      let step = 0
-      const timer = setInterval(() => {
-        step++
-        const progress = step / steps
-        const easeOut = 1 - Math.pow(1 - progress, 3)
-
-        setStats({
-          quizzes: Math.floor(targets.quizzes * easeOut),
-          attempts: Math.floor(targets.attempts * easeOut),
-          users: Math.floor(targets.users * easeOut)
-        })
-
-        if (step >= steps) {
-          clearInterval(timer)
-          setStats(targets)
-        }
-      }, stepTime)
+  // Demo questions for interactive preview
+  const demoQuestions = [
+    {
+      question: "What is the capital of France?",
+      options: ["London", "Berlin", "Paris", "Madrid"],
+      correct: 2
+    },
+    {
+      question: "Which planet is known as the Red Planet?",
+      options: ["Venus", "Mars", "Jupiter", "Saturn"],
+      correct: 1
+    },
+    {
+      question: "Who painted the Mona Lisa?",
+      options: ["Van Gogh", "Picasso", "Leonardo da Vinci", "Michelangelo"],
+      correct: 2
     }
+  ]
 
-    animateStats()
+  useEffect(() => {
+    loadInitialData()
   }, [])
+
+  // Animate demo question rotation
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDemoQuestion(prev => (prev + 1) % demoQuestions.length)
+      setSelectedDemoAnswer(null)
+    }, 4000)
+
+    return () => clearInterval(timer)
+  }, [])
+
+  const loadInitialData = async () => {
+    try {
+      // Load real stats from database
+      const [usersResult, quizzesResult, attemptsResult, categoriesResult] = await Promise.all([
+        supabase.from('profiles').select('id', { count: 'exact' }),
+        supabase.from('quizzes').select('id', { count: 'exact' }).eq('is_published', true),
+        supabase.from('user_quiz_attempts').select('id', { count: 'exact' }),
+        supabase.from('quiz_categories').select('name, icon, color').eq('is_active', true).limit(8)
+      ])
+
+      // Animate stats counting up
+      const targetStats = {
+        quizzes: quizzesResult.count || 0,
+        attempts: attemptsResult.count || 0,
+        users: usersResult.count || 0
+      }
+
+      // Add some buffer numbers if real data is low for demo purposes
+      const finalStats = {
+        quizzes: Math.max(targetStats.quizzes, 25),
+        attempts: Math.max(targetStats.attempts, 1247),
+        users: Math.max(targetStats.users, 89)
+      }
+
+      animateStats(finalStats)
+      
+      if (categoriesResult.data) {
+        setCategories(categoriesResult.data)
+      }
+
+    } catch (error) {
+      console.error('Error loading homepage data:', error)
+      // Fallback to demo data
+      animateStats({ quizzes: 25, attempts: 1247, users: 89 })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const animateStats = (targets) => {
+    const duration = 2000
+    const steps = 60
+    const stepTime = duration / steps
+
+    let step = 0
+    const timer = setInterval(() => {
+      step++
+      const progress = step / steps
+      const easeOut = 1 - Math.pow(1 - progress, 3)
+
+      setStats({
+        quizzes: Math.floor(targets.quizzes * easeOut),
+        attempts: Math.floor(targets.attempts * easeOut),
+        users: Math.floor(targets.users * easeOut)
+      })
+
+      if (step >= steps) {
+        clearInterval(timer)
+        setStats(targets)
+      }
+    }, stepTime)
+  }
 
   const features = [
     {
       icon: '🧠',
       title: 'Interactive Quizzes',
-      description: 'Test your knowledge with our engaging, timed quizzes across multiple subjects. Get immediate feedback and track your progress.',
+      description: 'Test your knowledge with engaging, timed quizzes across multiple subjects. Get immediate feedback and detailed explanations to enhance your learning.',
+      status: 'Available Now',
+      isAvailable: true
+    },
+    {
+      icon: '📊',
+      title: 'Progress Tracking',
+      description: 'Monitor your learning journey with detailed analytics, achievement badges, and personalized insights to optimize your study habits.',
       status: 'Available Now',
       isAvailable: true
     },
     {
       icon: '📚',
       title: 'Learning Articles',
-      description: 'Deep-dive into topics with our comprehensive, expert-written articles designed to enhance your understanding.',
-      status: 'Coming Soon',
-      isAvailable: false
-    },
-    {
-      icon: '🗺️',
-      title: 'Learning Paths',
-      description: 'Structured learning journeys that guide you from beginner to expert with curated content and milestones.',
+      description: 'Deep-dive into topics with comprehensive, expert-written articles designed to enhance your understanding and knowledge retention.',
       status: 'Coming Soon',
       isAvailable: false
     },
     {
       icon: '🎯',
       title: 'Personalized Learning',
-      description: 'AI-powered recommendations based on your progress, interests, and learning style preferences.',
+      description: 'AI-powered recommendations based on your progress, interests, and learning style preferences for optimized learning paths.',
+      status: 'Coming Soon',
+      isAvailable: false
+    },
+    {
+      icon: '👥',
+      title: 'Community Learning',
+      description: 'Connect with fellow learners, share knowledge, participate in discussions, and learn from diverse perspectives worldwide.',
+      status: 'Coming Soon',
+      isAvailable: false
+    },
+    {
+      icon: '🏆',
+      title: 'Achievements & Certifications',
+      description: 'Earn certificates, unlock achievements, and showcase your expertise with verifiable credentials recognized by institutions.',
       status: 'Coming Soon',
       isAvailable: false
     }
   ]
 
-  const categories = [
+  // Fallback categories if none loaded from database
+  const defaultCategories = [
     { name: 'Geography', icon: '🌍', color: '#059669' },
     { name: 'History', icon: '🏛️', color: '#dc2626' },
     { name: 'Science', icon: '🔬', color: '#2563eb' },
@@ -82,75 +167,83 @@ export default function HomePage() {
     { name: 'Languages', icon: '🗣️', color: '#16a34a' }
   ]
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentFeature((prev) => (prev + 1) % features.length)
-    }, 4000)
-    return () => clearInterval(interval)
-  }, [])
+  const displayCategories = categories.length > 0 ? categories : defaultCategories
 
-  // Generate floating background elements
-  const generateFloatingElements = () => {
-    return [...Array(15)].map((_, i) => (
-      <div
-        key={i}
-        className="floating-element"
-        style={{
-          width: Math.random() * 100 + 50 + 'px',
-          height: Math.random() * 100 + 50 + 'px',
-          left: Math.random() * 100 + '%',
-          top: Math.random() * 100 + '%',
-          animationDuration: Math.random() * 6 + 4 + 's',
-          animationDelay: Math.random() * 2 + 's'
-        }}
-      />
-    ))
+  const handleDemoAnswer = (index) => {
+    setSelectedDemoAnswer(index)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="homepage">
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '50vh',
+          color: '#6b7280',
+          fontSize: '1.2rem'
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🧠</div>
+            <div>Loading Curiodex...</div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="homepage">
-      {/* Animated Background Elements */}
+      {/* Clean Background */}
       <div className="homepage-bg">
-        {generateFloatingElements()}
+        <div className="bg-gradient" />
       </div>
 
       <div className="homepage-content">
         {/* Hero Section */}
         <section className="hero-section">
           <div className="hero-content">
-            <h1 className="hero-title">Curiodex</h1>
+            <h1 className="hero-title">
+              Learn Smarter with{' '}
+              <span className="gradient-text">Curiodex</span>
+            </h1>
             
             <p className="hero-subtitle">
-              Your gateway to knowledge through interactive learning experiences. 
-              Discover, learn, and grow with our comprehensive educational platform.
+              Discover knowledge through interactive quizzes, track your progress, and 
+              unlock your learning potential with our comprehensive educational platform 
+              designed for curious minds.
             </p>
 
             <div className="hero-buttons">
               <Link to="/quizzes" className="hero-btn-primary">
-                <span>🚀</span>
-                Start Learning Now
+                <span>🎯</span>
+                <span>Start Learning Now</span>
               </Link>
               
               <a href="#features" className="hero-btn-secondary">
-                <span>📖</span>
-                Explore Features
+                <span>✨</span>
+                <span>Explore Features</span>
               </a>
             </div>
 
             {/* Live Stats */}
             <div className="stats-grid">
               <div className="stat-card">
-                <span className="stat-value">{stats.quizzes}+</span>
+                <span className="stat-icon">🧠</span>
+                <span className="stat-value">{stats.quizzes.toLocaleString()}+</span>
                 <span className="stat-label">Interactive Quizzes</span>
               </div>
               
               <div className="stat-card">
+                <span className="stat-icon">🎯</span>
                 <span className="stat-value">{stats.attempts.toLocaleString()}+</span>
                 <span className="stat-label">Quiz Attempts</span>
               </div>
               
               <div className="stat-card">
-                <span className="stat-value">{stats.users}+</span>
+                <span className="stat-icon">👥</span>
+                <span className="stat-value">{stats.users.toLocaleString()}+</span>
                 <span className="stat-label">Active Learners</span>
               </div>
             </div>
@@ -158,26 +251,32 @@ export default function HomePage() {
         </section>
 
         {/* Features Section */}
-        <section id="features" className="section-glass">
-          <h2 className="section-title">Learning Platform Features</h2>
-          
-          <p className="section-subtitle">
-            Discover our comprehensive suite of learning tools designed to make education 
-            engaging, effective, and accessible to everyone.
-          </p>
+        <section id="features" className="section">
+          <div className="section-header">
+            <div className="section-badge">Features</div>
+            <h2 className="section-title">Everything You Need to Learn</h2>
+            <p className="section-subtitle">
+              Discover our comprehensive suite of learning tools designed to make education 
+              engaging, effective, and accessible to everyone, everywhere.
+            </p>
+          </div>
 
           <div className="features-grid">
             {features.map((feature, index) => (
               <div
                 key={index}
-                className={`feature-card ${currentFeature === index ? 'active' : ''}`}
-                onClick={() => setCurrentFeature(index)}
+                className={`feature-card ${feature.isAvailable ? 'available' : 'coming-soon'} interactive-element`}
+                style={{ animationDelay: `${index * 0.1}s` }}
               >
-                <span className="feature-icon">{feature.icon}</span>
-                <h3 className="feature-title">{feature.title}</h3>
+                <div className="feature-header">
+                  <div className="feature-icon">{feature.icon}</div>
+                  <h3 className="feature-title">{feature.title}</h3>
+                </div>
                 <p className="feature-description">{feature.description}</p>
                 <span className={`feature-status ${feature.isAvailable ? 'available' : 'coming-soon'}`}>
-                  {feature.status}
+                  {feature.isAvailable && <span>✅</span>}
+                  {!feature.isAvailable && <span>🚧</span>}
+                  <span>{feature.status}</span>
                 </span>
               </div>
             ))}
@@ -186,98 +285,65 @@ export default function HomePage() {
 
         {/* Categories Section */}
         <section className="section">
-          <h2 className="section-title">Explore Knowledge Categories</h2>
-          
-          <p className="section-subtitle">
-            Dive into diverse subjects and expand your understanding across 
-            multiple disciplines and areas of expertise.
-          </p>
+          <div className="section-header">
+            <div className="section-badge">Subjects</div>
+            <h2 className="section-title">Explore Knowledge Categories</h2>
+            <p className="section-subtitle">
+              Dive into diverse subjects and expand your understanding across 
+              multiple disciplines and areas of expertise.
+            </p>
+          </div>
 
           <div className="categories-grid">
-            {categories.map((category, index) => (
-              <div
+            {displayCategories.slice(0, 8).map((category, index) => (
+              <Link
                 key={index}
-                className="category-card"
+                to={`/quizzes?category=${encodeURIComponent(category.name)}`}
+                className="category-card interactive-element"
                 style={{
+                  '--category-color': category.color,
                   animationDelay: `${index * 0.1}s`
                 }}
               >
                 <span className="category-icon">{category.icon}</span>
-                <h3 className="category-name" style={{ color: category.color }}>
-                  {category.name}
-                </h3>
-              </div>
+                <h3 className="category-name">{category.name}</h3>
+                <p className="category-count">Explore quizzes</p>
+              </Link>
             ))}
-          </div>
-        </section>
-
-        {/* Vision Section */}
-        <section className="section-glass">
-          <h2 className="section-title">The Future of Learning</h2>
-          
-          <p className="section-subtitle">
-            Curiodex is evolving into a comprehensive learning ecosystem where knowledge 
-            comes alive through interactive experiences, personalized paths, and community-driven content.
-          </p>
-
-          <div className="features-grid">
-            <div className="feature-card">
-              <span className="feature-icon">📊</span>
-              <h3 className="feature-title">Progress Tracking</h3>
-              <p className="feature-description">
-                Monitor your learning journey with detailed analytics, achievement badges, 
-                and personalized insights to optimize your study habits.
-              </p>
-            </div>
-            
-            <div className="feature-card">
-              <span className="feature-icon">👥</span>
-              <h3 className="feature-title">Community Learning</h3>
-              <p className="feature-description">
-                Connect with fellow learners, share knowledge, participate in discussions, 
-                and learn from diverse perspectives around the world.
-              </p>
-            </div>
-            
-            <div className="feature-card">
-              <span className="feature-icon">🏆</span>
-              <h3 className="feature-title">Achievements & Certifications</h3>
-              <p className="feature-description">
-                Earn certificates, unlock achievements, and showcase your expertise 
-                with verifiable credentials recognized by educational institutions.
-              </p>
-            </div>
           </div>
         </section>
 
         {/* Call to Action */}
         <section className="cta-section">
-          <h2 className="cta-title">Ready to Begin Your Learning Journey?</h2>
-          
-          <p className="cta-description">
-            Join thousands of learners who are already expanding their knowledge with Curiodex. 
-            Start with our interactive quizzes and stay tuned for exciting new features that will 
-            transform how you learn and grow.
-          </p>
-
-          <div className="cta-buttons">
-            <Link to="/quizzes" className="cta-btn-primary">
-              <span>🎯</span>
-              Take Your First Quiz
-            </Link>
+          <div className="cta-content">
+            <h2 className="cta-title">Ready to Begin Your Learning Journey?</h2>
             
-            <Link to="/stats" className="cta-btn-secondary">
-              <span>📊</span>
-              View Your Progress
-            </Link>
+            <p className="cta-description">
+              Join thousands of learners who are already expanding their knowledge with Curiodex. 
+              Start with our interactive quizzes and discover a new way to learn and grow.
+            </p>
+
+            <div className="cta-buttons">
+              <Link to="/quizzes" className="cta-btn-primary">
+                <span>🎯</span>
+                <span>Take Your First Quiz</span>
+              </Link>
+              
+              <Link to="/stats" className="cta-btn-secondary">
+                <span>📊</span>
+                <span>View Your Progress</span>
+              </Link>
+            </div>
           </div>
         </section>
 
         {/* Footer */}
         <footer className="homepage-footer">
-          <p className="footer-text">
-            © 2025 Curiodex - Empowering minds through interactive learning experiences
-          </p>
+          <div className="footer-content">
+            <p className="footer-text">
+              © 2025 Curiodex - Empowering minds through interactive learning experiences
+            </p>
+          </div>
         </footer>
       </div>
     </div>

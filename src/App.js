@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
-import { useAdmin } from './hooks/useAdmin'
+import { CategoryProvider } from './contexts/CategoryContext'
 import Auth from './components/Auth'
 import HomePage from './components/HomePage'
 import ModernNavbar from './components/ModernNavbar'
@@ -69,60 +69,62 @@ function AppContent() {
   const isHomePage = location.pathname === '/'
 
   return (
-    <div style={{ minHeight: '100vh' }}>
-      {/* Show navbar on ALL pages including homepage */}
-      <ModernNavbar 
-        onQuizzesNavClick={handleQuizzesNavClick}
-        showNavConfirm={showNavConfirm}
-      />
-      
-      {/* Main content - always add padding for navbar */}
-      <main style={{ 
-        paddingTop: '80px',
-        minHeight: '100vh',
-        background: isHomePage ? 'transparent' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-      }}>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/quizzes" element={<QuizList />} />
-          <Route path="/quiz/:quizId" element={<QuizDetailPage />} />
-          <Route path="/quiz/:quizId/preview" element={<QuizPreview />} />
-          {/* Legacy route for direct play - redirects to preview */}
-          <Route path="/quiz/:quizId/play" element={<QuizPreview />} />
-          <Route path="/stats" element={<QuizStats />} />
-          <Route path="/admin/users" element={<ManageUsers />} />
-          
-          <Route path="/admin/*" element={
-            <AdminRoute>
-              <Routes>
-                <Route path="/" element={<AdminDashboard />} />
-                <Route path="/categories" element={<CategoryManager />} />
-                <Route path="/quizzes" element={<QuizManager />} />
-              </Routes>
-            </AdminRoute>
-          } />
-        </Routes>
-      </main>
+    <CategoryProvider>
+      <div style={{ minHeight: '100vh', background: '#ffffff' }}>
+        {/* Show navbar on ALL pages including homepage */}
+        <ModernNavbar 
+          onQuizzesNavClick={handleQuizzesNavClick}
+          showNavConfirm={showNavConfirm}
+        />
+        
+        {/* Main content - always add padding for navbar, clean white background for all pages except homepage */}
+        <main style={{ 
+          paddingTop: '70px',
+          minHeight: '100vh',
+          background: isHomePage ? 'transparent' : '#ffffff'
+        }}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/quizzes" element={<QuizList />} />
+            <Route path="/quiz/:quizId" element={<QuizDetailPage />} />
+            <Route path="/quiz/:quizId/preview" element={<QuizPreview />} />
+            {/* Legacy route for direct play - redirects to preview */}
+            <Route path="/quiz/:quizId/play" element={<QuizPreview />} />
+            <Route path="/stats" element={<QuizStats />} />
+            <Route path="/admin/users" element={<ManageUsers />} />
+            
+            <Route path="/admin/*" element={
+              <AdminRoute>
+                <Routes>
+                  <Route path="/" element={<AdminDashboard />} />
+                  <Route path="/categories" element={<CategoryManager />} />
+                  <Route path="/quizzes" element={<QuizManager />} />
+                </Routes>
+              </AdminRoute>
+            } />
+          </Routes>
+        </main>
 
-      {/* Navigation Confirmation Modal */}
-      <ConfirmModal
-        isOpen={showNavConfirm}
-        title="Leave Quiz?"
-        message={
-          <div>
-            <p>Are you sure you want to leave this quiz?</p>
-            <p style={{ color: '#dc3545', fontWeight: 'bold', margin: '8px 0 0 0' }}>
-              ⚠️ Your progress will be lost and won't be saved.
-            </p>
-          </div>
-        }
-        onConfirm={confirmNavigation}
-        onCancel={() => setShowNavConfirm(false)}
-        confirmText="Leave Quiz"
-        cancelText="Continue Quiz"
-        danger={true}
-      />
-    </div>
+        {/* Navigation Confirmation Modal */}
+        <ConfirmModal
+          isOpen={showNavConfirm}
+          title="Leave Quiz?"
+          message={
+            <div>
+              <p>Are you sure you want to leave this quiz?</p>
+              <p style={{ color: '#dc3545', fontWeight: 'bold', margin: '8px 0 0 0' }}>
+                ⚠️ Your progress will be lost and won't be saved.
+              </p>
+            </div>
+          }
+          onConfirm={confirmNavigation}
+          onCancel={() => setShowNavConfirm(false)}
+          confirmText="Leave Quiz"
+          cancelText="Continue Quiz"
+          danger={true}
+        />
+      </div>
+    </CategoryProvider>
   )
 }
 

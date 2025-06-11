@@ -1,16 +1,37 @@
-import { useState, useEffect } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useAdmin } from '../hooks/useAdmin'
+import { useCategories } from '../contexts/CategoryContext'
 import '../css/Navbar.css'
 
-export default function ModernNavbar({ onQuizzesNavClick, showNavConfirm }) {
+export default function ModernNavbar({ onQuizzesNavClick }) {
   const { user, profile, signOut } = useAuth()
   const { isAdmin } = useAdmin()
+  const { availableCategories, loadingCategories, refreshCategories } = useCategories()
   const location = useLocation()
+  const navigate = useNavigate()
+  
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [quizProgress, setQuizProgress] = useState(0)
+  const [activeDropdown, setActiveDropdown] = useState(null)
+  
+  const dropdownRefs = {
+    quizzes: useRef(null),
+    user: useRef(null)
+  }
+
+  // Refresh categories when coming from admin or quiz management areas
+  useEffect(() => {
+    if (location.pathname.startsWith('/admin')) {
+      // Refresh categories when in admin area in case changes were made
+      const timer = setTimeout(() => {
+        refreshCategories()
+      }, 1000)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [location.pathname, refreshCategories])
 
   // Handle scroll effect
   useEffect(() => {
@@ -22,29 +43,27 @@ export default function ModernNavbar({ onQuizzesNavClick, showNavConfirm }) {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Close mobile menu on route change
+  // Close dropdowns and mobile menu on route change
   useEffect(() => {
     setIsMobileMenuOpen(false)
+    setActiveDropdown(null)
   }, [location])
 
-  // Mock quiz progress detection
+  // Close dropdowns when clicking outside
   useEffect(() => {
-    if (location.pathname.includes('/quiz/') && location.pathname.includes('/preview')) {
-      // Simulate quiz progress
-      const timer = setInterval(() => {
-        setQuizProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(timer)
-            return 0
+    const handleClickOutside = (event) => {
+      Object.entries(dropdownRefs).forEach(([key, ref]) => {
+        if (ref.current && !ref.current.contains(event.target)) {
+          if (activeDropdown === key) {
+            setActiveDropdown(null)
           }
-          return prev + 2
-        })
-      }, 100)
-      return () => clearInterval(timer)
-    } else {
-      setQuizProgress(0)
+        }
+      })
     }
-  }, [location])
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [activeDropdown])
 
   const handleQuizzesClick = (e) => {
     if (onQuizzesNavClick) {
@@ -52,7 +71,11 @@ export default function ModernNavbar({ onQuizzesNavClick, showNavConfirm }) {
     }
   }
 
-  const handleMobileMenuToggle = () => {
+  const toggleDropdown = (dropdownName) => {
+    setActiveDropdown(activeDropdown === dropdownName ? null : dropdownName)
+  }
+
+  const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen)
   }
 
@@ -67,132 +90,293 @@ export default function ModernNavbar({ onQuizzesNavClick, showNavConfirm }) {
     return false
   }
 
-  const navItems = [
-    { path: '/', label: 'Home', icon: '🏠' },
-    { path: '/quizzes', label: 'Quizzes', icon: '🧠', onClick: handleQuizzesClick },
-    { path: '/stats', label: 'Statistics', icon: '📊' },
-    ...(isAdmin ? [{ path: '/admin', label: 'Admin', icon: '⚙️', badge: true }] : [])
-  ]
-
-  // Generate floating particles
-  const generateParticles = () => {
-    return [...Array(6)].map((_, i) => (
-      <div
-        key={i}
-        className="navbar-particle"
-        style={{
-          left: Math.random() * 100 + '%',
-          animationDelay: Math.random() * 6 + 's',
-          animationDuration: Math.random() * 4 + 6 + 's'
-        }}
-      />
-    ))
+  const handleSignOut = async () => {
+    await signOut()
+    setActiveDropdown(null)
+    navigate('/')
   }
 
-  return (
-    <nav className={`modern-navbar ${isScrolled ? 'scrolled' : ''}`}>
-      {/* Floating particles */}
-      {generateParticles()}
+  // Dynamic quiz dropdown items based on available categories
+  const getQuizDropdownItems = () => {
+    const items = [
+      { icon: '🧠', label: 'All Quizzes', path: '/quizzes' }
+    ]
+
+    // Add available categories
+    if (!loadingCategories && availableCategories.length > 0) {
+      items.push({ divider: true })
       
-      {/* Progress bar for quiz pages */}
-      {quizProgress > 0 && (
-        <div 
-          className="navbar-progress" 
-          style={{ width: `${quizProgress}%` }}
-        />
-      )}
+      availableCategories.forEach(category => {
+        items.push({
+          icon: category.icon || '📚',
+          label: category.name,
+          path: `/quizzes?category=${encodeURIComponent(category.name)}`
+        })
+      })
+    }
 
-      <div className="navbar-container">
-        {/* Logo */}
-        <Link to="/" className="navbar-logo">
-          <span className="logo-icon">🧠</span>
-          <span className="logo-text">Curiodex</span>
-        </Link>
+    // Add additional options
+    items.push(
+      { divider: true },
+      { icon: '📊', label: 'My Statistics', path: '/stats' },
+      { icon: '🎯', label: 'Random Quiz', path: '/quizzes?random=true' }
+    )
 
-        {/* Desktop Navigation */}
-        <ul className="navbar-nav">
-          {navItems.map((item) => (
-            <li key={item.path} className="nav-item">
+    return items
+  }
+
+  const userDropdownItems = [
+    { icon: '📊', label: 'My Statistics', path: '/stats' },
+    { icon: '🏆', label: 'Achievements', path: '/achievements' },
+    { icon: '⚙️', label: 'Settings', path: '/settings' },
+    { divider: true },
+    ...(isAdmin ? [{ icon: '👨‍💼', label: 'Admin Panel', path: '/admin' }, { divider: true }] : []),
+    { icon: '🚪', label: 'Sign Out', action: handleSignOut }
+  ]
+
+  const quizDropdownItems = getQuizDropdownItems()
+
+  return (
+    <>
+      <nav className={`modern-navbar ${isScrolled ? 'scrolled' : ''}`}>
+        <div className="navbar-container">
+          {/* Brand Logo */}
+          <Link to="/" className="navbar-brand">
+            <span className="brand-icon">🧠</span>
+            <span className="brand-text">Curiodex</span>
+          </Link>
+
+          {/* Desktop Navigation */}
+          <ul className="navbar-nav">
+            <li className="nav-item">
               <Link
-                to={item.path}
-                className={`nav-link ${isActivePath(item.path) ? 'active' : ''}`}
-                onClick={item.onClick}
+                to="/"
+                className={`nav-link ${isActivePath('/') ? 'active' : ''}`}
               >
-                <span className="nav-icon">{item.icon}</span>
-                <span>{item.label}</span>
-                {item.badge && <span className="admin-badge">Admin</span>}
-                {isActivePath(item.path) && <div className="nav-indicator" />}
+                <span className="nav-icon">🏠</span>
+                <span>Home</span>
               </Link>
             </li>
-          ))}
-        </ul>
 
-        {/* Desktop User Section */}
-        <div className="navbar-user">
-          <div className="user-info">
-            <div className="user-avatar">
-              {getInitials(profile?.username || profile?.email)}
+            {/* Quizzes Dropdown */}
+            <li className="nav-item nav-dropdown" ref={dropdownRefs.quizzes}>
+              <button
+                className={`dropdown-toggle ${activeDropdown === 'quizzes' ? 'active' : ''} ${isActivePath('/quiz') ? 'active' : ''}`}
+                onClick={() => toggleDropdown('quizzes')}
+              >
+                <span className="nav-icon">🧠</span>
+                <span>Quizzes</span>
+                <span className="dropdown-arrow">▼</span>
+              </button>
+              
+              <div className={`dropdown-menu ${activeDropdown === 'quizzes' ? 'open' : ''}`}>
+                {loadingCategories ? (
+                  <div className="dropdown-item" style={{ 
+                    opacity: 0.6, 
+                    cursor: 'default',
+                    pointerEvents: 'none'
+                  }}>
+                    <span className="dropdown-item-icon">⏳</span>
+                    <span>Loading categories...</span>
+                  </div>
+                ) : (
+                  quizDropdownItems.map((item, index) => {
+                    if (item.divider) {
+                      return <div key={index} className="dropdown-divider" />
+                    }
+                    return (
+                      <Link
+                        key={index}
+                        to={item.path}
+                        className="dropdown-item"
+                        onClick={() => setActiveDropdown(null)}
+                      >
+                        <span className="dropdown-item-icon">{item.icon}</span>
+                        <span>{item.label}</span>
+                      </Link>
+                    )
+                  })
+                )}
+              </div>
+            </li>
+
+            {/* Admin Link (if admin) */}
+            {isAdmin && (
+              <li className="nav-item">
+                <Link
+                  to="/admin"
+                  className={`nav-link ${isActivePath('/admin') ? 'active' : ''}`}
+                >
+                  <span className="nav-icon">⚙️</span>
+                  <span>Admin</span>
+                  <span className="admin-badge">Admin</span>
+                </Link>
+              </li>
+            )}
+          </ul>
+
+          {/* Desktop User Section */}
+          <div className="navbar-user">
+            <div className="user-dropdown" ref={dropdownRefs.user}>
+              <button
+                className={`user-button ${activeDropdown === 'user' ? 'active' : ''}`}
+                onClick={() => toggleDropdown('user')}
+              >
+                <div className="user-avatar">
+                  {getInitials(profile?.username || profile?.email)}
+                </div>
+                <div className="user-info">
+                  <span className="user-name">
+                    {profile?.username || 'User'}
+                  </span>
+                  <span className="user-role">
+                    {profile?.role || 'Member'}
+                  </span>
+                </div>
+                <span className="user-dropdown-arrow">▼</span>
+              </button>
+
+              <div className={`dropdown-menu ${activeDropdown === 'user' ? 'open' : ''}`}>
+                {userDropdownItems.map((item, index) => {
+                  if (item.divider) {
+                    return <div key={index} className="dropdown-divider" />
+                  }
+                  if (item.action) {
+                    return (
+                      <button
+                        key={index}
+                        className="dropdown-item"
+                        onClick={item.action}
+                        style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none' }}
+                      >
+                        <span className="dropdown-item-icon">{item.icon}</span>
+                        <span>{item.label}</span>
+                      </button>
+                    )
+                  }
+                  return (
+                    <Link
+                      key={index}
+                      to={item.path}
+                      className="dropdown-item"
+                      onClick={() => setActiveDropdown(null)}
+                    >
+                      <span className="dropdown-item-icon">{item.icon}</span>
+                      <span>{item.label}</span>
+                    </Link>
+                  )
+                })}
+              </div>
             </div>
-            <span className="user-name">
-              {profile?.username || 'User'}
-            </span>
           </div>
-          
-          <button onClick={signOut} className="sign-out-btn">
-            <span>🚪</span>
-            <span>Sign Out</span>
+
+          {/* Mobile Menu Toggle */}
+          <button 
+            className="mobile-menu-toggle"
+            onClick={toggleMobileMenu}
+            aria-label="Toggle mobile menu"
+          >
+            {isMobileMenuOpen ? '✕' : '☰'}
           </button>
         </div>
 
-        {/* Mobile Menu Toggle */}
-        <button 
-          className="mobile-menu-toggle"
-          onClick={handleMobileMenuToggle}
-          aria-label="Toggle mobile menu"
-        >
-          {isMobileMenuOpen ? '✕' : '☰'}
-        </button>
-      </div>
-
-      {/* Mobile Menu */}
-      <div className={`mobile-menu ${isMobileMenuOpen ? 'open' : ''}`}>
-        <ul className="mobile-nav">
-          {navItems.map((item) => (
-            <li key={item.path}>
+        {/* Mobile Menu */}
+        <div className={`mobile-menu ${isMobileMenuOpen ? 'open' : ''}`}>
+          <ul className="mobile-nav">
+            <li>
               <Link
-                to={item.path}
-                className={`nav-link ${isActivePath(item.path) ? 'active' : ''}`}
-                onClick={item.onClick}
+                to="/"
+                className={`nav-link ${isActivePath('/') ? 'active' : ''}`}
               >
-                <span className="nav-icon">{item.icon}</span>
-                <span>{item.label}</span>
-                {item.badge && <span className="admin-badge">Admin</span>}
+                <span className="nav-icon">🏠</span>
+                <span>Home</span>
               </Link>
             </li>
-          ))}
-        </ul>
+            
+            <li>
+              <Link
+                to="/quizzes"
+                className={`nav-link ${isActivePath('/quiz') ? 'active' : ''}`}
+                onClick={handleQuizzesClick}
+              >
+                <span className="nav-icon">🧠</span>
+                <span>All Quizzes</span>
+              </Link>
+            </li>
 
-        <div className="mobile-user-section">
-          <div className="mobile-user-info">
-            <div className="mobile-user-avatar">
-              {getInitials(profile?.username || profile?.email)}
-            </div>
-            <div>
-              <div style={{ color: 'white', fontWeight: '500' }}>
-                {profile?.username || 'User'}
+            {/* Mobile Categories */}
+            {!loadingCategories && availableCategories.length > 0 && (
+              <>
+                {availableCategories.map((category, index) => (
+                  <li key={index}>
+                    <Link
+                      to={`/quizzes?category=${encodeURIComponent(category.name)}`}
+                      className="nav-link"
+                      style={{ paddingLeft: '2rem' }}
+                    >
+                      <span className="nav-icon">{category.icon}</span>
+                      <span>{category.name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </>
+            )}
+            
+            <li>
+              <Link
+                to="/stats"
+                className={`nav-link ${isActivePath('/stats') ? 'active' : ''}`}
+              >
+                <span className="nav-icon">📊</span>
+                <span>Statistics</span>
+              </Link>
+            </li>
+
+            {isAdmin && (
+              <li>
+                <Link
+                  to="/admin"
+                  className={`nav-link ${isActivePath('/admin') ? 'active' : ''}`}
+                >
+                  <span className="nav-icon">⚙️</span>
+                  <span>Admin Panel</span>
+                  <span className="admin-badge">Admin</span>
+                </Link>
+              </li>
+            )}
+          </ul>
+
+          <div className="mobile-user-section">
+            <div className="mobile-user-info">
+              <div className="mobile-user-avatar">
+                {getInitials(profile?.username || profile?.email)}
               </div>
-              <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.9rem' }}>
-                {profile?.email}
+              <div>
+                <div style={{ color: '#1a1a1a', fontWeight: '600', fontSize: '1rem' }}>
+                  {profile?.username || 'User'}
+                </div>
+                <div style={{ color: '#6b7280', fontSize: '0.9rem', textTransform: 'capitalize' }}>
+                  {profile?.role || 'Member'}
+                </div>
+                <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>
+                  {profile?.email}
+                </div>
               </div>
             </div>
+            
+            <button onClick={handleSignOut} className="mobile-sign-out">
+              <span>🚪</span>
+              <span>Sign Out</span>
+            </button>
           </div>
-          
-          <button onClick={signOut} className="mobile-sign-out">
-            <span>🚪</span>
-            <span>Sign Out</span>
-          </button>
         </div>
-      </div>
-    </nav>
+      </nav>
+
+      {/* Mobile Menu Overlay */}
+      <div 
+        className={`mobile-menu-overlay ${isMobileMenuOpen ? 'open' : ''}`}
+        onClick={() => setIsMobileMenuOpen(false)}
+      />
+    </>
   )
 }

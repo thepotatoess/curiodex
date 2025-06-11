@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useCategories } from '../../contexts/CategoryContext'
 import QuizForm from './QuizForm'
 import { useToast, ToastContainer } from '../Toast'
 import { ConfirmModal } from '../ConfirmModal'
@@ -11,6 +12,7 @@ export default function QuizManager() {
   const [editingQuiz, setEditingQuiz] = useState(null)
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, quiz: null })
   const { toasts, addToast, removeToast } = useToast()
+  const { refreshCategories } = useCategories()
 
   useEffect(() => {
     loadQuizzes()
@@ -75,6 +77,9 @@ export default function QuizManager() {
 
       addToast('Quiz and all related data deleted successfully', 'success')
       loadQuizzes()
+      
+      // Refresh categories in case this was the last quiz in a category
+      refreshCategories()
     } catch (error) {
       console.error('Error deleting quiz:', error)
       addToast('Failed to delete quiz: ' + error.message, 'error')
@@ -117,6 +122,9 @@ export default function QuizManager() {
     setEditingQuiz(null)
     loadQuizzes()
     addToast(message, 'success')
+    
+    // Refresh categories in case a new category was used or quiz was published
+    refreshCategories()
   }
 
   const handleFormCancel = () => {

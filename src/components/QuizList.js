@@ -1,25 +1,71 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import '../css/QuizList.css'
 
 export default function QuizList() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  
   const [quizzes, setQuizzes] = useState([])
   const [loading, setLoading] = useState(true)
   const [userAttempts, setUserAttempts] = useState([])
   
-  // Search and filter states
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('all')
-  const [selectedDifficulty, setSelectedDifficulty] = useState('all')
-  const [selectedPlayedStatus, setSelectedPlayedStatus] = useState('all')
+  // Search and filter states - initialize from URL parameters
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
+  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'all')
+  const [selectedDifficulty, setSelectedDifficulty] = useState(searchParams.get('difficulty') || 'all')
+  const [selectedPlayedStatus, setSelectedPlayedStatus] = useState(searchParams.get('status') || 'all')
   const [availableCategories, setAvailableCategories] = useState([])
 
   useEffect(() => {
     loadQuizzes()
     loadUserAttempts()
   }, [])
+
+  // Update filters when URL parameters change
+  useEffect(() => {
+    const category = searchParams.get('category')
+    const difficulty = searchParams.get('difficulty')
+    const status = searchParams.get('status')
+    const search = searchParams.get('search')
+    const random = searchParams.get('random')
+
+    if (category && category !== selectedCategory) {
+      setSelectedCategory(category)
+    }
+    if (difficulty && difficulty !== selectedDifficulty) {
+      setSelectedDifficulty(difficulty)
+    }
+    if (status && status !== selectedPlayedStatus) {
+      setSelectedPlayedStatus(status)
+    }
+    if (search && search !== searchTerm) {
+      setSearchTerm(search)
+    }
+
+    // Handle random quiz
+    if (random === 'true' && quizzes.length > 0) {
+      const randomIndex = Math.floor(Math.random() * quizzes.length)
+      const randomQuiz = quizzes[randomIndex]
+      navigate(`/quiz/${randomQuiz.id}/preview`)
+    }
+  }, [searchParams, quizzes])
+
+  // Update URL when filters change
+  const updateURLParams = (newParams) => {
+    const currentParams = Object.fromEntries(searchParams)
+    const updatedParams = { ...currentParams, ...newParams }
+    
+    // Remove empty or 'all' values
+    Object.keys(updatedParams).forEach(key => {
+      if (!updatedParams[key] || updatedParams[key] === 'all') {
+        delete updatedParams[key]
+      }
+    })
+
+    setSearchParams(updatedParams)
+  }
 
   const loadQuizzes = async () => {
     try {
@@ -156,6 +202,7 @@ export default function QuizList() {
     setSelectedCategory('all')
     setSelectedDifficulty('all')
     setSelectedPlayedStatus('all')
+    setSearchParams({}) // Clear URL parameters
   }
 
   const startRandomQuiz = () => {
@@ -164,6 +211,27 @@ export default function QuizList() {
     const randomIndex = Math.floor(Math.random() * filteredQuizzes.length)
     const randomQuiz = filteredQuizzes[randomIndex]
     handleDirectPlay(randomQuiz.id) // Skip preview for random quiz
+  }
+
+  // Handle filter changes with URL update
+  const handleSearchChange = (value) => {
+    setSearchTerm(value)
+    updateURLParams({ search: value })
+  }
+
+  const handleCategoryChange = (value) => {
+    setSelectedCategory(value)
+    updateURLParams({ category: value })
+  }
+
+  const handleDifficultyChange = (value) => {
+    setSelectedDifficulty(value)
+    updateURLParams({ difficulty: value })
+  }
+
+  const handlePlayedStatusChange = (value) => {
+    setSelectedPlayedStatus(value)
+    updateURLParams({ status: value })
   }
 
   if (loading) return <div className="quiz-loading">Loading quizzes...</div>
@@ -182,7 +250,7 @@ export default function QuizList() {
             type="text"
             placeholder="Search quizzes by name, description, or category..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="search-input"
           />
         </div>
@@ -193,7 +261,7 @@ export default function QuizList() {
             <select
               id="category-filter"
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
+              onChange={(e) => handleCategoryChange(e.target.value)}
               className="filter-select"
             >
               <option value="all">All Categories</option>
@@ -210,7 +278,7 @@ export default function QuizList() {
             <select
               id="difficulty-filter"
               value={selectedDifficulty}
-              onChange={(e) => setSelectedDifficulty(e.target.value)}
+              onChange={(e) => handleDifficultyChange(e.target.value)}
               className="filter-select"
             >
               <option value="all">All Difficulties</option>
@@ -225,7 +293,7 @@ export default function QuizList() {
             <select
               id="played-filter"
               value={selectedPlayedStatus}
-              onChange={(e) => setSelectedPlayedStatus(e.target.value)}
+              onChange={(e) => handlePlayedStatusChange(e.target.value)}
               className="filter-select"
             >
               <option value="all">All Quizzes</option>

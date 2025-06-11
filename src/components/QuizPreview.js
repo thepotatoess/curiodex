@@ -11,28 +11,28 @@ export default function QuizPreview() {
   const [quiz, setQuiz] = useState(null)
   const [questions, setQuestions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [quizStats, setQuizStats] = useState(null)
   const [userStats, setUserStats] = useState(null)
   
-  // Quiz state
-  const [gameState, setGameState] = useState('preview') // 'preview', 'playing', 'results'
-  const [currentQuestion, setCurrentQuestion] = useState(0)
+  // Preview states
+  const [previewQuestionIndex, setPreviewQuestionIndex] = useState(0)
+  const [showQuizPreview, setShowQuizPreview] = useState(false)
+  
+  // Quiz taking states
+  const [gameMode, setGameMode] = useState('preview') // 'preview', 'taking', 'completed'
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [answers, setAnswers] = useState({})
-  const [submitting, setSubmitting] = useState(false)
-  const [results, setResults] = useState(null)
+  const [timeRemaining, setTimeRemaining] = useState(0)
+  const [isTimerActive, setIsTimerActive] = useState(false)
   const [startTime, setStartTime] = useState(null)
+  const [results, setResults] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
   const [previousBest, setPreviousBest] = useState(null)
   const [isNewRecord, setIsNewRecord] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
-  const [showResultsPopup, setShowResultsPopup] = useState(false)
   
-  // Timer states
-  const [timeRemaining, setTimeRemaining] = useState(0)
-  const [isTimerActive, setIsTimerActive] = useState(false)
   const timerRef = useRef(null)
-  
-  const currentQ = questions[currentQuestion] || null
-  const isAnswered = currentQ ? answers[currentQ.id] !== undefined : false
 
   useEffect(() => {
     if (quizId) {
@@ -40,9 +40,9 @@ export default function QuizPreview() {
     }
   }, [quizId])
 
-  // Timer effect
+  // Timer effect for quiz taking
   useEffect(() => {
-    if (currentQ && isTimerActive && timeRemaining > 0 && gameState === 'playing') {
+    if (gameMode === 'taking' && isTimerActive && timeRemaining > 0) {
       timerRef.current = setInterval(() => {
         setTimeRemaining(prev => {
           if (prev <= 1) {
@@ -57,17 +57,16 @@ export default function QuizPreview() {
     }
 
     return () => clearInterval(timerRef.current)
-  }, [currentQuestion, isTimerActive, timeRemaining, gameState])
+  }, [gameMode, isTimerActive, timeRemaining, currentQuestionIndex])
 
-  // Start timer when question changes during play
+  // Start timer when question changes during quiz
   useEffect(() => {
-    if (currentQ && !isAnswered && gameState === 'playing') {
-      setTimeRemaining(currentQ.time_limit_seconds || 30)
+    if (gameMode === 'taking' && questions[currentQuestionIndex] && !answers[questions[currentQuestionIndex]?.id]) {
+      const currentQuestion = questions[currentQuestionIndex]
+      setTimeRemaining(currentQuestion.time_limit_seconds || 30)
       setIsTimerActive(true)
-    } else {
-      setIsTimerActive(false)
     }
-  }, [currentQuestion, currentQ, gameState])
+  }, [currentQuestionIndex, gameMode])
 
   const loadQuizData = async () => {
     try {
@@ -81,9 +80,13 @@ export default function QuizPreview() {
         .eq('is_published', true)
         .single()
 
-      if (quizError) throw quizError
+      if (quizError) {
+        setError('Quiz not found or not available')
+        setLoading(false)
+        return
+      }
 
-      // Load all questions
+      // Load questions
       const { data: questionsData, error: questionsError } = await supabase
         .from('questions')
         .select('*')
@@ -109,7 +112,7 @@ export default function QuizPreview() {
       // Load quiz statistics
       await loadQuizStats(quizId)
       
-      // Load user statistics
+      // Load user statistics if logged in
       if (user) {
         await loadUserStats(user.id, quizId)
       }
@@ -118,13 +121,16 @@ export default function QuizPreview() {
         ...quizData,
         category_icon: categoryData?.icon || '📚',
         category_color: categoryData?.color || '#6b7280',
-        question_count: parsedQuestions.length
+        question_count: parsedQuestions.length,
+        total_points: parsedQuestions.reduce((sum, q) => sum + q.points, 0),
+        estimated_time: Math.ceil(parsedQuestions.reduce((sum, q) => sum + (q.time_limit_seconds || 30), 0) / 60)
       })
       
       setQuestions(parsedQuestions)
 
     } catch (error) {
       console.error('Error loading quiz data:', error)
+      setError('Failed to load quiz data')
     } finally {
       setLoading(false)
     }
@@ -148,7 +154,8 @@ export default function QuizPreview() {
           uniquePlayers: uniqueUsers,
           averageScore: Math.round(percentages.reduce((a, b) => a + b, 0) / percentages.length),
           highestScore: Math.max(...percentages),
-          averageTime: Math.round(attempts.reduce((sum, a) => sum + a.time_taken, 0) / attempts.length)
+          averageTime: Math.round(attempts.reduce((sum, a) => sum + a.time_taken, 0) / attempts.length),
+          completionRate: Math.round((uniqueUsers / attempts.length) * 100)
         })
       } else {
         setQuizStats({
@@ -156,7 +163,8 @@ export default function QuizPreview() {
           uniquePlayers: 0,
           averageScore: 0,
           highestScore: 0,
-          averageTime: 0
+          averageTime: 0,
+          completionRate: 0
         })
       }
     } catch (error) {
@@ -181,21 +189,24 @@ export default function QuizPreview() {
           (current.score / current.max_score) > (best.score / best.max_score) ? current : best
         )
 
-        const userStatsData = {
+        const improvement = scores.length > 1 ? scores[0] - scores[scores.length - 1] : 0
+
+        setUserStats({
           totalAttempts: attempts.length,
           bestScore: bestAttempt.score,
           bestMaxScore: bestAttempt.max_score,
           bestPercentage: Math.round((bestAttempt.score / bestAttempt.max_score) * 100),
           averagePercentage: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
           bestTime: Math.min(...attempts.map(a => a.time_taken)),
-          lastPlayed: attempts[0].completed_at
-        }
+          lastPlayed: attempts[0].completed_at,
+          improvement,
+          streak: calculateStreak(scores)
+        })
 
-        setUserStats(userStatsData)
         setPreviousBest({
           score: bestAttempt.score,
           maxScore: bestAttempt.max_score,
-          percentage: userStatsData.bestPercentage
+          percentage: Math.round((bestAttempt.score / bestAttempt.max_score) * 100)
         })
       }
     } catch (error) {
@@ -203,13 +214,35 @@ export default function QuizPreview() {
     }
   }
 
+  const calculateStreak = (scores) => {
+    let currentStreak = 0
+    for (let i = 0; i < scores.length; i++) {
+      if (scores[i] >= 80) {
+        currentStreak++
+      } else {
+        break
+      }
+    }
+    return currentStreak
+  }
+
+  // Quiz taking functions
   const handleStartQuiz = () => {
-    setGameState('playing')
-    setStartTime(Date.now())
-    setCurrentQuestion(0)
+    setGameMode('taking')
+    setCurrentQuestionIndex(0)
     setAnswers({})
-    setTimeRemaining(questions[0]?.time_limit_seconds || 30)
+    setStartTime(Date.now())
+    const firstQuestion = questions[0]
+    setTimeRemaining(firstQuestion?.time_limit_seconds || 30)
     setIsTimerActive(true)
+  }
+
+  const handleShowPreview = () => {
+    setShowQuizPreview(true)
+  }
+
+  const handleHidePreview = () => {
+    setShowQuizPreview(false)
   }
 
   const handleAnswer = (questionId, answer) => {
@@ -223,7 +256,7 @@ export default function QuizPreview() {
   const handleTimeUp = () => {
     setIsTimerActive(false)
     
-    if (currentQuestion < questions.length - 1) {
+    if (currentQuestionIndex < questions.length - 1) {
       setTimeout(() => {
         nextQuestion()
       }, 1000)
@@ -235,31 +268,17 @@ export default function QuizPreview() {
   }
 
   const nextQuestion = () => {
-    if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1)
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1)
       setIsTimerActive(true)
     }
   }
 
   const prevQuestion = () => {
-    if (currentQuestion > 0) {
-      setCurrentQuestion(currentQuestion - 1)
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1)
       setIsTimerActive(false)
     }
-  }
-
-  const handleCancelClick = () => {
-    setIsTimerActive(false)
-    setShowCancelConfirm(true)
-  }
-
-  const confirmCancel = () => {
-    setShowCancelConfirm(false)
-    setGameState('preview')
-    setCurrentQuestion(0)
-    setAnswers({})
-    setTimeRemaining(0)
-    setIsTimerActive(false)
   }
 
   const submitQuiz = async () => {
@@ -303,19 +322,16 @@ export default function QuizPreview() {
         score,
         maxScore,
         timeTaken,
-        quizTitle: quiz.title,
+        percentage: currentPercentage,
         questions,
         userAnswers: answers,
         isNewRecord,
-        previousBest,
-        quizId,
-        percentage: currentPercentage
+        previousBest
       })
       
-      setGameState('results')
-      setShowResultsPopup(true)
+      setGameMode('completed')
 
-      // Reload stats after completion
+      // Reload stats
       loadQuizStats(quizId)
       if (user) {
         loadUserStats(user.id, quizId)
@@ -329,52 +345,57 @@ export default function QuizPreview() {
   }
 
   const handleRetakeQuiz = () => {
-    setShowResultsPopup(false)
-    setGameState('preview')
-    setCurrentQuestion(0)
+    setGameMode('preview')
+    setCurrentQuestionIndex(0)
     setAnswers({})
     setResults(null)
     setIsNewRecord(false)
     setTimeRemaining(0)
     setIsTimerActive(false)
+    setShowQuizPreview(false)
   }
 
-  const closeResultsPopup = () => {
-    setShowResultsPopup(false)
+  const handleCancelQuiz = () => {
+    setShowCancelConfirm(true)
+    setIsTimerActive(false)
   }
 
-  const handleBackClick = () => {
-    if (gameState === 'playing') {
-      handleCancelClick()
-    } else {
-      navigate(`/quiz/${quizId}`)
-    }
+  const confirmCancelQuiz = () => {
+    setShowCancelConfirm(false)
+    handleRetakeQuiz()
+  }
+
+  const cancelCancelQuiz = () => {
+    setShowCancelConfirm(false)
+    setIsTimerActive(true) // Resume timer
   }
 
   const formatTime = (seconds) => {
     if (seconds < 60) return `${seconds}s`
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
-    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`
-  }
-
-  const formatTimeDetailed = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
-  const getDifficultyColor = (difficulty) => {
+  const getDifficultyIcon = (difficulty) => {
     switch (difficulty) {
-      case 'easy': return '#10b981'
-      case 'medium': return '#f59e0b'
-      case 'hard': return '#ef4444'
-      default: return '#6b7280'
+      case 'easy': return '🟢'
+      case 'medium': return '🟡'
+      case 'hard': return '🔴'
+      default: return '⚪'
     }
   }
 
+  const getPerformanceLevel = (percentage) => {
+    if (percentage >= 90) return { level: 'Expert', color: '#10b981', icon: '🏆' }
+    if (percentage >= 80) return { level: 'Advanced', color: '#3b82f6', icon: '⭐' }
+    if (percentage >= 70) return { level: 'Proficient', color: '#8b5cf6', icon: '👍' }
+    if (percentage >= 60) return { level: 'Developing', color: '#f59e0b', icon: '📈' }
+    return { level: 'Beginner', color: '#ef4444', icon: '📚' }
+  }
+
   const getTimerColor = () => {
-    const total = currentQ?.time_limit_seconds || 30
+    const total = questions[currentQuestionIndex]?.time_limit_seconds || 30
     const percentage = (timeRemaining / total) * 100
     
     if (percentage > 50) return '#10b981'
@@ -382,190 +403,75 @@ export default function QuizPreview() {
     return '#ef4444'
   }
 
-  const getPerformanceData = (percentage) => {
-    if (percentage >= 90) return {
-      emoji: '🎉',
-      title: 'Outstanding!',
-      message: 'You absolutely nailed it!',
-      level: 'excellent'
-    }
-    if (percentage >= 80) return {
-      emoji: '🌟',
-      title: 'Excellent!',
-      message: 'Great job on this quiz!',
-      level: 'good'
-    }
-    if (percentage >= 70) return {
-      emoji: '👏',
-      title: 'Well Done!',
-      message: 'You did really well!',
-      level: 'medium'
-    }
-    if (percentage >= 60) return {
-      emoji: '👍',
-      title: 'Good Job!',
-      message: 'Solid performance!',
-      level: 'fair'
-    }
-    return {
-      emoji: '📚',
-      title: 'Keep Learning!',
-      message: 'Practice makes perfect!',
-      level: 'poor'
-    }
-  }
-
   if (loading) {
     return (
-      <div className="quiz-preview-container">
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#6b7280' }}>
-          Loading quiz...
+      <div className="quiz-preview-modern">
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <p>Loading quiz preview...</p>
         </div>
       </div>
     )
   }
 
-  if (!quiz || questions.length === 0) {
+  if (error || !quiz || questions.length === 0) {
     return (
-      <div className="quiz-preview-container">
-        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-          <h2>Quiz not found</h2>
-          <p>The quiz you're looking for doesn't exist or has no questions.</p>
-          <button onClick={() => navigate('/quizzes')} className="btn btn-primary">
-            Back to Quizzes
+      <div className="quiz-preview-modern">
+        <div className="error-state">
+          <div className="error-icon">❌</div>
+          <h2>Quiz Not Available</h2>
+          <p>{error || 'The quiz you\'re looking for doesn\'t exist or has no questions.'}</p>
+          <button onClick={() => navigate('/quizzes')} className="btn-primary">
+            Browse Other Quizzes
           </button>
         </div>
       </div>
     )
   }
 
-  return (
-    <div className="quiz-preview-container">
-      {/* Timer Display - only during playing */}
-      {gameState === 'playing' && isTimerActive && (
-        <div 
-          className={`timer-display ${timeRemaining <= 10 ? 'urgent' : ''}`}
-          style={{ borderColor: getTimerColor(), color: getTimerColor() }}
-        >
-          <span className="timer-icon">⏱️</span>
-          <span>{formatTimeDetailed(timeRemaining)}</span>
-        </div>
-      )}
+  const currentQuestion = questions[gameMode === 'taking' ? currentQuestionIndex : previewQuestionIndex]
+  const userPerformance = userStats ? getPerformanceLevel(userStats.bestPercentage) : null
 
-      {/* Back Button */}
-      <button onClick={handleBackClick} className="preview-back-btn">
-        ← Back to Quiz Details
-      </button>
+  // Quiz Taking Mode
+  if (gameMode === 'taking') {
+    const progress = ((currentQuestionIndex + 1) / questions.length) * 100
+    const isAnswered = answers[currentQuestion?.id] !== undefined
 
-      {/* Header - always visible */}
-      <div className="preview-header">
-        <h1 className="preview-title">{quiz.title}</h1>
-        <p className="preview-description">{quiz.description}</p>
-        
-        <div className="preview-meta">
-          <div className="meta-item">
-            <span className="meta-icon" style={{ color: quiz.category_color }}>
-              {quiz.category_icon}
-            </span>
-            <span>{quiz.category}</span>
-          </div>
-          <div className="meta-item">
-            <span className="meta-icon" style={{ color: getDifficultyColor(quiz.difficulty) }}>
-              📊
-            </span>
-            <span style={{ textTransform: 'capitalize' }}>{quiz.difficulty}</span>
-          </div>
-          <div className="meta-item">
-            <span className="meta-icon">❓</span>
-            <span>{quiz.question_count} Questions</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Compact Statistics - always visible */}
-      <div className="stats-compact-container">
-        {/* Quiz Statistics */}
-        {quizStats && (
-          <div className="quiz-stats-section">
-            <h3 className="stats-title">Quiz Stats</h3>
-            <div className="stats-grid">
-              <div className="stat-card">
-                <div className="stat-icon">👥</div>
-                <div className="stat-value">{quizStats.uniquePlayers}</div>
-                <div className="stat-label">Players</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-icon">🎯</div>
-                <div className="stat-value">{quizStats.totalAttempts}</div>
-                <div className="stat-label">Attempts</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-icon">📈</div>
-                <div className="stat-value">{quizStats.averageScore}%</div>
-                <div className="stat-label">Avg Score</div>
-              </div>
-              {quizStats.highestScore > 0 && (
-                <div className="stat-card highlight">
-                  <div className="stat-icon">🏆</div>
-                  <div className="stat-value">{quizStats.highestScore}%</div>
-                  <div className="stat-label">Best</div>
-                </div>
-              )}
+    return (
+      <div className="quiz-preview-modern quiz-taking-mode">
+        <div className="quiz-taking-container">
+          {/* Quiz Header */}
+          <div className="quiz-header">
+            <h1>{quiz.title}</h1>
+            <div className="quiz-info-bar">
+              <span className="quiz-progress-text">Question {currentQuestionIndex + 1} of {questions.length}</span>
+              <span className="quiz-metadata">Category: {quiz.category} | Difficulty: {quiz.difficulty}</span>
             </div>
-          </div>
-        )}
-
-        {/* User Personal Stats */}
-        {userStats && (
-          <div className="user-stats-section">
-            <h3 className="stats-title">Your Stats</h3>
-            <div className="user-stats-grid">
-              <div className="user-stat-card">
-                <div className="stat-icon">🎯</div>
-                <div className="stat-value">{userStats.totalAttempts}</div>
-                <div className="stat-label">Attempts</div>
-              </div>
-              <div className="user-stat-card highlight">
-                <div className="stat-icon">⭐</div>
-                <div className="stat-value">{userStats.bestPercentage}%</div>
-                <div className="stat-label">Best</div>
-              </div>
-              <div className="user-stat-card">
-                <div className="stat-icon">📊</div>
-                <div className="stat-value">{userStats.averagePercentage}%</div>
-                <div className="stat-label">Average</div>
-              </div>
-              <div className="user-stat-card">
-                <div className="stat-icon">⚡</div>
-                <div className="stat-value">{formatTimeDetailed(userStats.bestTime)}</div>
-                <div className="stat-label">Best Time</div>
-              </div>
+            <div className="quiz-progress-bar">
+              <div className="quiz-progress-fill" style={{ width: `${progress}%` }}></div>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Quiz Playing Interface */}
-      {gameState === 'playing' && (
-        <>
-          {/* Progress Bar */}
-          <div className="quiz-info-bar">
-            <span className="quiz-progress-text">Question {currentQuestion + 1} of {questions.length}</span>
-            <span className="quiz-metadata">Progress: {Math.round(((currentQuestion + 1) / questions.length) * 100)}%</span>
-          </div>
-          <div className="quiz-progress-bar">
-            <div className="quiz-progress-fill" style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}></div>
           </div>
 
           {/* Question Card */}
           <div className="question-card">
-            <h3 className="question-text">{currentQ.question_text}</h3>
+            {/* Timer in top-right corner of question card */}
+            {isTimerActive && (
+              <div 
+                className={`timer-display-inline ${timeRemaining <= 10 ? 'urgent' : ''}`}
+                style={{ color: getTimerColor() }}
+              >
+                <span className="timer-icon">⏱️</span>
+                <span>{formatTime(timeRemaining)}</span>
+              </div>
+            )}
+
+            <h3 className="question-text">{currentQuestion.question_text}</h3>
             
             <div className="answer-options">
-              {currentQ.options.map((option, index) => {
-                const isSelected = answers[currentQ.id] === option
-                const isCorrect = option === currentQ.correct_answer
-                const showFeedback = answers[currentQ.id] !== undefined
+              {currentQuestion.options.map((option, index) => {
+                const isSelected = answers[currentQuestion.id] === option
+                const isCorrect = option === currentQuestion.correct_answer
+                const showFeedback = answers[currentQuestion.id] !== undefined
                 
                 let optionClass = 'answer-option'
                 if (showFeedback) {
@@ -584,10 +490,10 @@ export default function QuizPreview() {
                   <label key={index} className={optionClass}>
                     <input
                       type="radio"
-                      name={`question-${currentQ.id}`}
+                      name={`question-${currentQuestion.id}`}
                       value={option}
                       checked={isSelected}
-                      onChange={(e) => handleAnswer(currentQ.id, e.target.value)}
+                      onChange={(e) => handleAnswer(currentQuestion.id, e.target.value)}
                       disabled={showFeedback || timeRemaining === 0}
                       className="answer-radio"
                     />
@@ -605,15 +511,15 @@ export default function QuizPreview() {
               })}
             </div>
 
-            {isAnswered && currentQ.explanation && (
+            {isAnswered && currentQuestion.explanation && (
               <div className="question-explanation">
                 <h4>Explanation:</h4>
-                <p>{currentQ.explanation}</p>
+                <p>{currentQuestion.explanation}</p>
               </div>
             )}
 
             <div className="question-points">
-              Points: {currentQ.points} | Time Limit: {currentQ.time_limit_seconds}s
+              Points: {currentQuestion.points} | Time Limit: {currentQuestion.time_limit_seconds}s
             </div>
 
             {timeRemaining === 0 && !isAnswered && (
@@ -628,7 +534,7 @@ export default function QuizPreview() {
             <div className="nav-buttons-left">
               <button
                 onClick={prevQuestion}
-                disabled={currentQuestion === 0}
+                disabled={currentQuestionIndex === 0}
                 className="nav-btn nav-btn-prev"
               >
                 Previous
@@ -636,11 +542,14 @@ export default function QuizPreview() {
             </div>
 
             <div className="nav-buttons-right">
-              <button onClick={handleCancelClick} className="nav-btn nav-btn-cancel">
+              <button
+                onClick={handleCancelQuiz}
+                className="nav-btn nav-btn-cancel"
+              >
                 Cancel Quiz
               </button>
 
-              {currentQuestion === questions.length - 1 ? (
+              {currentQuestionIndex === questions.length - 1 ? (
                 <button
                   onClick={submitQuiz}
                   disabled={submitting}
@@ -651,7 +560,7 @@ export default function QuizPreview() {
               ) : (
                 <button
                   onClick={nextQuestion}
-                  disabled={!answers[currentQ.id] && timeRemaining > 0}
+                  disabled={!answers[currentQuestion.id] && timeRemaining > 0}
                   className="nav-btn nav-btn-next"
                 >
                   Next
@@ -663,207 +572,364 @@ export default function QuizPreview() {
           <div className="quiz-progress-indicator">
             Answered: {Object.keys(answers).length} / {questions.length} questions
           </div>
-        </>
-      )}
+        </div>
 
-      {/* Preview Interface */}
-      {gameState === 'preview' && (
-        <>
-          {/* Instructions */}
-          <div className="quiz-instructions">
-            <h3 className="instructions-title">
-              <span>📋</span>
-              Quiz Instructions
-            </h3>
-            <ul className="instructions-list">
-              <li>Answer each question within the time limit</li>
-              <li>You can review your answer before moving to the next question</li>
-              <li>Once you move to the next question, you cannot go back</li>
-              <li>Complete all questions to see your final score</li>
-              <li>You can retake the quiz as many times as you want</li>
-            </ul>
+        {/* Cancel Confirmation Modal */}
+        <ConfirmModal
+          isOpen={showCancelConfirm}
+          title="Cancel Quiz?"
+          message={
+            <div>
+              <p>Are you sure you want to cancel this quiz?</p>
+              <p style={{ color: '#dc3545', fontWeight: 'bold', margin: '8px 0 0 0' }}>
+                ⚠️ Your progress will be lost and won't be saved.
+              </p>
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: '8px 0 0 0' }}>
+                You've answered {Object.keys(answers).length} of {questions.length} questions.
+              </p>
+            </div>
+          }
+          onConfirm={confirmCancelQuiz}
+          onCancel={cancelCancelQuiz}
+          confirmText="Cancel Quiz"
+          cancelText="Continue Quiz"
+          danger={true}
+        />
+      </div>
+    )
+  }
+
+  // Results Mode
+  if (gameMode === 'completed' && results) {
+    const performance = getPerformanceLevel(results.percentage)
+    
+    return (
+      <div className="quiz-preview-modern">
+        <div className="results-container">
+          <div className={`results-card ${performance.level.toLowerCase()}`}>
+            {isNewRecord && (
+              <div className="new-record-badge">
+                🏆 NEW PERSONAL BEST! 🏆
+              </div>
+            )}
+
+            <div className="results-emoji">{performance.icon}</div>
+            <h1 className="results-title">{performance.level} Performance!</h1>
+            <div className="results-score">{results.percentage}%</div>
+            <div className="results-points">
+              {results.score} out of {results.maxScore} points
+            </div>
+            
+            {previousBest && !isNewRecord && (
+              <div className="previous-best">
+                Previous best: {previousBest.percentage}%
+              </div>
+            )}
           </div>
 
-          {/* Preview Question */}
-          <div className="preview-question-card blurred">
-            <div className="preview-question-content">
-              <div className="preview-question-number">
-                Question 1 of {quiz.question_count}
+          <div className="results-actions">
+            <button onClick={handleRetakeQuiz} className="btn-start-quiz-green">
+              <span>🔄</span>
+              <span>Try Again</span>
+            </button>
+            <button onClick={() => navigate('/quizzes')} className="btn-secondary">
+              <span>📋</span>
+              <span>Back to Quizzes</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Preview Mode (Default)
+  return (
+    <div className="quiz-preview-modern">
+      {/* Navigation */}
+      <div className="preview-nav">
+        <button 
+          onClick={() => navigate(`/quiz/${quizId}`)} 
+          className="nav-back"
+        >
+          ← Quiz Details
+        </button>
+        <div className="nav-breadcrumb">
+          <span className="breadcrumb-item">Quizzes</span>
+          <span className="breadcrumb-separator">/</span>
+          <span className="breadcrumb-item">{quiz.category}</span>
+          <span className="breadcrumb-separator">/</span>
+          <span className="breadcrumb-current">Preview</span>
+        </div>
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="preview-grid">
+        {/* Left Column - Quiz Info & Preview */}
+        <div className="preview-main">
+          {/* Quiz Header */}
+          <div className="quiz-header-card">
+            <div className="quiz-header-top">
+              <div className="quiz-category" style={{ backgroundColor: quiz.category_color }}>
+                <span className="category-icon">{quiz.category_icon}</span>
+                <span className="category-name">{quiz.category}</span>
               </div>
-              
-              <h3 className="preview-question-text">
-                {questions[0].question_text}
-              </h3>
-              
-              <div className="preview-answer-options">
-                {questions[0].options.map((option, index) => (
-                  <div key={index} className="preview-answer-option">
-                    <span className="answer-letter">
-                      {String.fromCharCode(65 + index)}:
-                    </span>
-                    <span>{option}</span>
+              <div className="quiz-difficulty">
+                <span className="difficulty-icon">{getDifficultyIcon(quiz.difficulty)}</span>
+                <span className="difficulty-text">{quiz.difficulty}</span>
+              </div>
+            </div>
+            
+            <h1 className="quiz-title">{quiz.title}</h1>
+            <p className="quiz-description">{quiz.description}</p>
+            
+            <div className="quiz-meta-row">
+              <div className="meta-item">
+                <span className="meta-icon">❓</span>
+                <span>{quiz.question_count} Questions</span>
+              </div>
+              <div className="meta-item">
+                <span className="meta-icon">⏱️</span>
+                <span>~{quiz.estimated_time} min</span>
+              </div>
+              <div className="meta-item">
+                <span className="meta-icon">🎯</span>
+                <span>{quiz.total_points} Points</span>
+              </div>
+              <div className="meta-item">
+                <span className="meta-icon">👥</span>
+                <span>{quizStats?.uniquePlayers || 0} Players</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Question Preview */}
+          <div className="question-preview-section">
+            <div className="section-header">
+              <h2>Question Preview</h2>
+              {showQuizPreview && (
+                <div className="question-nav">
+                  <button 
+                    onClick={() => setPreviewQuestionIndex(Math.max(0, previewQuestionIndex - 1))}
+                    disabled={previewQuestionIndex === 0}
+                    className="question-nav-btn"
+                  >
+                    ←
+                  </button>
+                  <span className="question-counter">
+                    {previewQuestionIndex + 1} of {questions.length}
+                  </span>
+                  <button 
+                    onClick={() => setPreviewQuestionIndex(Math.min(questions.length - 1, previewQuestionIndex + 1))}
+                    disabled={previewQuestionIndex === questions.length - 1}
+                    className="question-nav-btn"
+                  >
+                    →
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className={`question-card-preview ${!showQuizPreview ? 'blurred' : ''}`}>
+              <div className="question-header">
+                <div className="question-number">Q{previewQuestionIndex + 1}</div>
+                <div className="question-timer">
+                  <span>⏱️</span>
+                  <span>{formatTime(currentQuestion.time_limit_seconds)}</span>
+                </div>
+              </div>
+
+              <h3 className="question-text">{currentQuestion.question_text}</h3>
+
+              <div className="answer-options">
+                {currentQuestion.options.map((option, index) => (
+                  <div key={index} className="answer-option-preview">
+                    <div className="option-letter">{String.fromCharCode(65 + index)}</div>
+                    <div className="option-text">{option}</div>
                   </div>
                 ))}
               </div>
 
-              <div className="preview-question-info">
-                <div className="question-points">
+              <div className="question-meta">
+                <span className="points-indicator">
                   <span>🏆</span>
-                  <span>{questions[0].points} points</span>
-                </div>
-                <div className="question-time-limit">
-                  <span>⏱️</span>
-                  <span>{formatTime(questions[0].time_limit_seconds || 30)} to answer</span>
-                </div>
+                  <span>{currentQuestion.points} points</span>
+                </span>
               </div>
-            </div>
 
-            <div className="blur-overlay">
-              <div className="preview-overlay-content">
-                <h3 className="preview-overlay-title">Ready to Start?</h3>
-                <p className="preview-overlay-text">
-                  {userStats 
-                    ? `Your best score: ${userStats.bestPercentage}%. Think you can do better?`
-                    : "Click the button below to begin your quiz journey!"
-                  }
-                </p>
-                <button onClick={handleStartQuiz} className="start-quiz-btn">
-                  <span>🚀</span>
-                  {userStats ? 'Try Again' : 'Start Quiz'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Additional Info */}
-          <div style={{ 
-            textAlign: 'center', 
-            color: '#6b7280', 
-            fontSize: '14px',
-            marginTop: '2rem' 
-          }}>
-            <p>Good luck! Take your time and think carefully about each answer.</p>
-          </div>
-        </>
-      )}
-
-      {/* Question Review After Results */}
-      {gameState === 'results' && results && (
-        <div className="question-review-after-results">
-          <h3>Question Review</h3>
-          <div className="question-review-grid-compact">
-            {questions.map((question, index) => {
-              const userAnswer = answers[question.id]
-              const isCorrect = userAnswer === question.correct_answer
-              
-              return (
-                <div key={question.id} className={`review-item-compact ${isCorrect ? 'correct' : 'incorrect'}`}>
-                  <div className="review-header-compact">
-                    <span className="review-icon-compact">
-                      {isCorrect ? '✅' : '❌'}
-                    </span>
-                    <span className="review-question-number-compact">
-                      Question {index + 1}
-                    </span>
-                  </div>
-                  
-                  <p className="review-question-text-compact">
-                    {question.question_text}
-                  </p>
-                  
-                  <div className="review-answers-compact">
-                    <div className="review-answer-row-compact">
-                      <strong>Your answer:</strong> {userAnswer || 'No answer'}
+              {/* Blur Overlay */}
+              {!showQuizPreview && (
+                <div className="preview-overlay">
+                  <div className="preview-overlay-content">
+                    <div className="overlay-icon">🚀</div>
+                    <h3 className="preview-overlay-title">Ready to Test Your Knowledge?</h3>
+                    <p className="preview-overlay-text">
+                      {userStats 
+                        ? `Your best score is ${userStats.bestPercentage}%. Ready to improve it?`
+                        : `${quiz.question_count} questions • ${quiz.estimated_time} minutes • ${quiz.total_points} points`
+                      }
+                    </p>
+                    
+                    <div className="overlay-buttons">
+                      <button onClick={handleStartQuiz} className="btn-start-quiz-green">
+                        <span className="btn-icon">🎯</span>
+                        <span>{userStats ? 'Start Quiz Again' : 'Start Quiz Now'}</span>
+                      </button>
+                      
+                      <button onClick={handleShowPreview} className="btn-preview-questions">
+                        <span className="btn-icon">👀</span>
+                        <span>Preview Questions First</span>
+                      </button>
                     </div>
-                    <div className="review-answer-row-compact">
-                      <strong>Correct answer:</strong> {question.correct_answer}
-                    </div>
-                    {question.explanation && (
-                      <div className="review-explanation-compact">
-                        <strong>Explanation:</strong> {question.explanation}
+
+                    {userStats && (
+                      <div className="quick-stats">
+                        <div className="quick-stat">
+                          <span className="stat-value">{userStats.totalAttempts}</span>
+                          <span className="stat-label">attempts</span>
+                        </div>
+                        <div className="quick-stat">
+                          <span className="stat-value">{userStats.bestPercentage}%</span>
+                          <span className="stat-label">best score</span>
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
-              )
-            })}
+              )}
+            </div>
+
+            {/* Show action bar when in preview mode */}
+            {showQuizPreview && (
+              <div className="preview-action-bar">
+                <button onClick={handleHidePreview} className="btn-hide-preview">
+                  Hide Preview
+                </button>
+                <button onClick={handleStartQuiz} className="btn-start-quiz-green">
+                  <span>🚀</span>
+                  <span>Start Real Quiz</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      )}
 
-      {/* Results Popup */}
-      {showResultsPopup && results && (
-        <div className="results-popup-overlay" onClick={closeResultsPopup}>
-          <div className="results-popup" onClick={(e) => e.stopPropagation()}>
-            <button className="popup-close-btn" onClick={closeResultsPopup}>×</button>
-            
-            <div className="results-popup-header">
-              {isNewRecord && (
-                <div className="new-record-popup-badge">
-                  🏆 NEW PERSONAL BEST! 🏆
+        {/* Right Column - Stats & Actions */}
+        <div className="preview-sidebar">
+          {/* Your Performance */}
+          {userStats && (
+            <div className="stats-card user-stats">
+              <div className="stats-header">
+                <h3>Your Performance</h3>
+                <div className="performance-badge" style={{ backgroundColor: userPerformance.color }}>
+                  <span>{userPerformance.icon}</span>
+                  <span>{userPerformance.level}</span>
+                </div>
+              </div>
+              
+              <div className="stats-grid">
+                <div className="stat-item highlight">
+                  <div className="stat-value">{userStats.bestPercentage}%</div>
+                  <div className="stat-label">Best Score</div>
+                </div>
+                <div className="stat-item">
+                  <div className="stat-value">{userStats.totalAttempts}</div>
+                  <div className="stat-label">Attempts</div>
+                </div>
+                <div className="stat-item">
+                  <div className="stat-value">{userStats.averagePercentage}%</div>
+                  <div className="stat-label">Average</div>
+                </div>
+                <div className="stat-item">
+                  <div className="stat-value">{userStats.streak}</div>
+                  <div className="stat-label">Current Streak</div>
+                </div>
+              </div>
+
+              {userStats.improvement !== 0 && (
+                <div className="improvement-indicator">
+                  <span className={`improvement-icon ${userStats.improvement > 0 ? 'positive' : 'negative'}`}>
+                    {userStats.improvement > 0 ? '📈' : '📉'}
+                  </span>
+                  <span className="improvement-text">
+                    {userStats.improvement > 0 ? '+' : ''}{userStats.improvement}% from first attempt
+                  </span>
                 </div>
               )}
-
-              <div className="results-popup-emoji">
-                {getPerformanceData(results.percentage).emoji}
-              </div>
-              
-              <h2 className="results-popup-title">
-                {getPerformanceData(results.percentage).title}
-              </h2>
-              
-              <div className="results-popup-score">
-                {results.percentage}%
-              </div>
-              
-              <p className="results-popup-details">
-                {results.score} out of {results.maxScore} points in {formatTimeDetailed(results.timeTaken)}
-              </p>
             </div>
+          )}
 
-            <div className="results-popup-actions">
-              <button
-                onClick={handleRetakeQuiz}
-                className="results-popup-btn results-popup-btn-primary"
-              >
-                Try Again
-              </button>
-              
-              <button
-                onClick={closeResultsPopup}
-                className="results-popup-btn results-popup-btn-secondary"
-              >
-                Review Answers
-              </button>
+          {/* Quiz Statistics */}
+          <div className="stats-card global-stats">
+            <div className="stats-header">
+              <h3>Quiz Statistics</h3>
+            </div>
+            
+            <div className="stats-grid">
+              <div className="stat-item">
+                <div className="stat-value">{quizStats?.uniquePlayers || 0}</div>
+                <div className="stat-label">Total Players</div>
+              </div>
+              <div className="stat-item">
+                <div className="stat-value">{quizStats?.averageScore || 0}%</div>
+                <div className="stat-label">Average Score</div>
+              </div>
+              <div className="stat-item">
+                <div className="stat-value">{quizStats?.highestScore || 0}%</div>
+                <div className="stat-label">Highest Score</div>
+              </div>
+              <div className="stat-item">
+                <div className="stat-value">{quizStats?.completionRate || 0}%</div>
+                <div className="stat-label">Completion Rate</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Tips */}
+          <div className="tips-card">
+            <h3>💡 Quick Tips</h3>
+            <ul className="tips-list">
+              <li>Read each question carefully</li>
+              <li>Watch the timer for each question</li>
+              <li>You can't go back once you proceed</li>
+              <li>Complete all questions for your final score</li>
+            </ul>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="action-section">
+            <button onClick={handleStartQuiz} className="btn-start-quiz">
+              <span className="btn-icon">🚀</span>
+              <span>{userStats ? 'Try Again' : 'Start Quiz'}</span>
+            </button>
+            
+            <button 
+              onClick={() => navigate(`/quiz/${quizId}`)} 
+              className="btn-secondary"
+            >
+              View Full Details
+            </button>
+          </div>
+
+          {/* Future Features Placeholder */}
+          <div className="future-features">
+            <div className="feature-coming-soon">
+              <span className="feature-icon">📚</span>
+              <div className="feature-text">
+                <div className="feature-title">Study Materials</div>
+                <div className="feature-subtitle">Coming Soon</div>
+              </div>
+            </div>
+            
+            <div className="feature-coming-soon">
+              <span className="feature-icon">🎓</span>
+              <div className="feature-text">
+                <div className="feature-title">Learning Path</div>
+                <div className="feature-subtitle">Coming Soon</div>
+              </div>
             </div>
           </div>
         </div>
-      )}
-
-      {/* Cancel Confirmation Modal */}
-      <ConfirmModal
-        isOpen={showCancelConfirm}
-        title="Cancel Quiz?"
-        message={
-          <div>
-            <p>Are you sure you want to cancel this quiz?</p>
-            <p style={{ color: '#dc3545', fontWeight: 'bold', margin: '8px 0 0 0' }}>
-              ⚠️ Your progress will be lost and won't be saved.
-            </p>
-            <p style={{ fontSize: '14px', color: '#6b7280', margin: '8px 0 0 0' }}>
-              You've answered {Object.keys(answers).length} of {questions.length} questions.
-            </p>
-          </div>
-        }
-        onConfirm={confirmCancel}
-        onCancel={() => {
-          setShowCancelConfirm(false)
-          setIsTimerActive(true)
-        }}
-        confirmText="Cancel Quiz"
-        cancelText="Continue Quiz"
-        danger={true}
-      />
+      </div>
     </div>
   )
 }
