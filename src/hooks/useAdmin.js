@@ -16,8 +16,20 @@ export function useAdmin() {
           return
         }
 
-        // For now, just allow your specific email until profiles table is working
-        setIsAdmin(user.email === 'cplex6655@proton.me')
+        // Check admin status from database instead of hardcoded email
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('is_admin, role')
+          .eq('id', user.id)
+          .single()
+
+        if (error) {
+          console.error('Error checking admin status:', error)
+          setIsAdmin(false)
+        } else {
+          // User is admin if either is_admin is true OR role is 'admin'
+          setIsAdmin(profile?.is_admin === true || profile?.role === 'admin')
+        }
       } catch (error) {
         console.error('Error checking admin status:', error)
         setIsAdmin(false)
@@ -27,6 +39,13 @@ export function useAdmin() {
     }
 
     checkAdminStatus()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      checkAdminStatus()
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   return { isAdmin, loading }

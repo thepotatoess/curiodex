@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { ConfirmModal } from './ConfirmModal'
+import { useAdmin } from '../hooks/useAdmin'
 import '../css/QuizComments.css'
 
 export default function QuizComments({ quizId, quizTitle }) {
@@ -25,6 +26,8 @@ export default function QuizComments({ quizId, quizTitle }) {
   const [highlightedReply, setHighlightedReply] = useState(null)
 
   const MAX_COMMENT_LENGTH = 1000
+
+  const { isAdmin } = useAdmin()
 
   useEffect(() => {
     if (quizId) {
@@ -290,47 +293,64 @@ export default function QuizComments({ quizId, quizTitle }) {
     setEditingText('')
   }
 
-  const handleDeleteComment = async () => {
-    try {
-      const { error } = await supabase
-        .from('quiz_comments')
-        .update({ is_deleted: true })
-        .eq('id', deleteModal.commentId)
-        .eq('user_id', user.id)
+const handleDeleteCommentWithFunction = async () => {
+  try {
+    console.log('Attempting to delete comment using function:', deleteModal.commentId)
+    console.log('User ID:', user?.id)
 
-      if (error) throw error
+    // Call the PostgreSQL function
+    const { data, error } = await supabase.rpc('delete_comment', {
+      comment_id: deleteModal.commentId,
+      requesting_user_id: user.id
+    })
 
-      // Remove from local state - handle both top-level comments and replies
-      setComments(prev => {
-        return prev.map(comment => {
-          // Check if this is a top-level comment being deleted
-          if (comment.id === deleteModal.commentId) {
-            return null // Will be filtered out
-          }
-          
-          // Check if this is a reply being deleted
-          const updatedReplies = comment.replies.filter(reply => reply.id !== deleteModal.commentId)
-          
-          return {
-            ...comment,
-            replies: updatedReplies
-          }
-        }).filter(Boolean) // Remove null entries (deleted top-level comments)
-      })
-
-      // Also remove from reply targets if it was a reply with a target
-      setReplyTargets(prev => {
-        const newTargets = { ...prev }
-        delete newTargets[deleteModal.commentId]
-        return newTargets
-      })
-
-      setDeleteModal({ isOpen: false, commentId: null })
-    } catch (error) {
-      console.error('Error deleting comment:', error)
-      alert('Failed to delete comment. Please try again.')
+    if (error) {
+      console.error('Function call error:', error)
+      throw new Error(`Database function error: ${error.message}`)
     }
+
+    console.log('Function response:', data)
+
+    // Check the function result
+    if (!data.success) {
+      throw new Error(data.error || 'Unknown error occurred')
+    }
+
+    // Remove from local state - handle both top-level comments and replies
+    setComments(prev => {
+      return prev.map(comment => {
+        // Check if this is a top-level comment being deleted
+        if (comment.id === deleteModal.commentId) {
+          return null // Will be filtered out
+        }
+        
+        // Check if this is a reply being deleted
+        const updatedReplies = comment.replies.filter(reply => reply.id !== deleteModal.commentId)
+        
+        return {
+          ...comment,
+          replies: updatedReplies
+        }
+      }).filter(Boolean) // Remove null entries (deleted top-level comments)
+    })
+
+    // Also remove from reply targets if it was a reply with a target
+    setReplyTargets(prev => {
+      const newTargets = { ...prev }
+      delete newTargets[deleteModal.commentId]
+      return newTargets
+    })
+
+    setDeleteModal({ isOpen: false, commentId: null })
+    
+    // Show success message
+    alert('Comment deleted successfully!')
+    
+  } catch (error) {
+    console.error('Error in handleDeleteCommentWithFunction:', error)
+    alert(`Failed to delete comment: ${error.message}`)
   }
+}
 
   const toggleReplies = (commentId) => {
     setExpandedReplies(prev => {
@@ -419,7 +439,7 @@ export default function QuizComments({ quizId, quizTitle }) {
   }
 
   const isUserComment = (comment) => {
-    return user && comment.user_id === user.id
+    return user && (comment.user_id === user.id || isAdmin)
   }
 
   const remainingChars = MAX_COMMENT_LENGTH - newComment.length
@@ -878,7 +898,7 @@ export default function QuizComments({ quizId, quizTitle }) {
         isOpen={deleteModal.isOpen}
         title="Delete Comment?"
         message="Are you sure you want to delete this comment? This action cannot be undone."
-        onConfirm={handleDeleteComment}
+        onConfirm={handleDeleteCommentWithFunction}
         onCancel={() => setDeleteModal({ isOpen: false, commentId: null })}
         confirmText="Delete"
         cancelText="Cancel"
