@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { useAdmin } from './hooks/useAdmin'
 import Auth from './components/Auth'
+import HomePage from './components/HomePage'
+import ModernNavbar from './components/ModernNavbar'
 import AdminRoute from './components/admin/AdminRoute'
 import AdminDashboard from './components/admin/AdminDashboard'
 import QuizManager from './components/admin/QuizManager'
@@ -15,12 +17,28 @@ import QuizStats from './components/QuizStats'
 import { ConfirmModal } from './components/ConfirmModal'
 
 function AppContent() {
-  const { user, profile, loading, signOut } = useAuth()
-  const { isAdmin } = useAdmin()
+  const { user, profile, loading } = useAuth()
   const location = useLocation()
   const [showNavConfirm, setShowNavConfirm] = useState(false)
 
-  if (loading) return <div>Loading...</div>
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        color: 'white',
+        fontSize: '1.2rem'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🧠</div>
+          <div>Loading Curiodex...</div>
+        </div>
+      </div>
+    )
+  }
 
   if (!user) return <Auth />
 
@@ -48,62 +66,43 @@ function AppContent() {
     window.location.reload()
   }
 
-  return (
-    <div>
-      <nav style={{ padding: '20px', borderBottom: '1px solid #ddd', marginBottom: '20px' }}>
-        <Link to="/" style={{ marginRight: '20px', textDecoration: 'none', color: '#007bff' }}>Home</Link>
-        <Link 
-          to="/quizzes" 
-          onClick={handleQuizzesNavClick}
-          style={{ marginRight: '20px', textDecoration: 'none', color: '#007bff' }}
-        >
-          Take Quizzes
-        </Link>
-        <Link to="/stats" style={{ marginRight: '20px', textDecoration: 'none', color: '#007bff' }}>My Statistics</Link>
-        {isAdmin && <Link to="/admin" style={{ marginRight: '20px', textDecoration: 'none', color: '#007bff' }}>Admin</Link>}
-        <button onClick={signOut} style={{ float: 'right', padding: '8px 16px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Sign Out</button>
-        <span style={{ float: 'right', marginRight: '20px' }}>Hello, {profile?.username}</span>
-      </nav>
+  const isHomePage = location.pathname === '/'
 
-      <Routes>
-        <Route path="/" element={
-          <div style={{ padding: '20px', textAlign: 'center' }}>
-            <h1>Welcome to Curiodex!</h1>
-            <p style={{ fontSize: '18px', marginBottom: '30px' }}>Test your knowledge with our interactive quizzes!</p>
-            <Link to="/quizzes">
-              <button style={{ 
-                padding: '15px 30px', 
-                backgroundColor: '#007bff', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '6px', 
-                fontSize: '18px',
-                cursor: 'pointer'
-              }}>
-                Browse Quizzes
-              </button>
-            </Link>
-          </div>
-        } />
-        
-        <Route path="/quizzes" element={<QuizList />} />
-        <Route path="/quiz/:quizId" element={<QuizDetailPage />} />
-        <Route path="/quiz/:quizId/preview" element={<QuizPreview />} />
-        {/* Legacy route for direct play - redirects to preview */}
-        <Route path="/quiz/:quizId/play" element={<QuizPreview />} />
-        <Route path="/stats" element={<QuizStats />} />
-        <Route path="/admin/users" element={<ManageUsers />} />
-        
-        <Route path="/admin/*" element={
-          <AdminRoute>
-            <Routes>
-              <Route path="/" element={<AdminDashboard />} />
-              <Route path="/categories" element={<CategoryManager />} />
-              <Route path="/quizzes" element={<QuizManager />} />
-            </Routes>
-          </AdminRoute>
-        } />
-      </Routes>
+  return (
+    <div style={{ minHeight: '100vh' }}>
+      {/* Show navbar on ALL pages including homepage */}
+      <ModernNavbar 
+        onQuizzesNavClick={handleQuizzesNavClick}
+        showNavConfirm={showNavConfirm}
+      />
+      
+      {/* Main content - always add padding for navbar */}
+      <main style={{ 
+        paddingTop: '80px',
+        minHeight: '100vh',
+        background: isHomePage ? 'transparent' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      }}>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/quizzes" element={<QuizList />} />
+          <Route path="/quiz/:quizId" element={<QuizDetailPage />} />
+          <Route path="/quiz/:quizId/preview" element={<QuizPreview />} />
+          {/* Legacy route for direct play - redirects to preview */}
+          <Route path="/quiz/:quizId/play" element={<QuizPreview />} />
+          <Route path="/stats" element={<QuizStats />} />
+          <Route path="/admin/users" element={<ManageUsers />} />
+          
+          <Route path="/admin/*" element={
+            <AdminRoute>
+              <Routes>
+                <Route path="/" element={<AdminDashboard />} />
+                <Route path="/categories" element={<CategoryManager />} />
+                <Route path="/quizzes" element={<QuizManager />} />
+              </Routes>
+            </AdminRoute>
+          } />
+        </Routes>
+      </main>
 
       {/* Navigation Confirmation Modal */}
       <ConfirmModal
