@@ -187,6 +187,12 @@ export default function AdminDashboard() {
             onClick={() => window.location.href = '/admin/quizzes'}
             className="quick-action-btn quizzes"
           >
+            Create New Quiz
+          </button>
+          <button 
+            onClick={() => window.location.href = '/admin/quizzes'}
+            className="quick-action-btn quizzes"
+          >
             Manage Quizzes
           </button>
           <button 

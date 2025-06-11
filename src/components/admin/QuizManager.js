@@ -244,7 +244,7 @@ export default function QuizManager() {
             </div>
             
             <p style={{ margin: '8px 0 0 0', fontSize: '14px', color: '#6b7280' }}>
-              <strong>{deleteModal.quiz?.play_count || 0}</strong> users have taken this quiz.
+              This quiz have been played <strong>{deleteModal.quiz?.play_count || 0}</strong> times.
             </p>
           </div>
         }
