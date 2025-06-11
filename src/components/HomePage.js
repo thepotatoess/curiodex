@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../hooks/useAuth'
 import '../css/Homepage.css'
 
 export default function HomePage() {
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  
   const [stats, setStats] = useState({
     quizzes: 0,
     attempts: 0,
@@ -46,6 +50,28 @@ export default function HomePage() {
 
     return () => clearInterval(timer)
   }, [])
+
+  // Handle the start learning button
+  const handleStartLearning = () => {
+    if (user) {
+      // User is logged in - go to quizzes
+      navigate('/quizzes')
+    } else {
+      // User is not logged in - go to login page
+      navigate('/login')
+    }
+  }
+
+  // Handle category clicks
+  const handleCategoryClick = (categoryName) => {
+    if (user) {
+      // User is logged in - go to filtered quizzes
+      navigate(`/quizzes?category=${encodeURIComponent(categoryName)}`)
+    } else {
+      // User is not logged in - go to login page
+      navigate('/login')
+    }
+  }
 
   const loadInitialData = async () => {
     try {
@@ -216,10 +242,13 @@ export default function HomePage() {
             </p>
 
             <div className="hero-buttons">
-              <Link to="/quizzes" className="hero-btn-primary">
+              <button 
+                onClick={handleStartLearning}
+                className="hero-btn-primary"
+              >
                 <span>🎯</span>
-                <span>Start Learning Now</span>
-              </Link>
+                <span>{user ? 'Continue Learning' : 'Start Learning Now'}</span>
+              </button>
               
               <a href="#features" className="hero-btn-secondary">
                 <span>✨</span>
@@ -296,19 +325,22 @@ export default function HomePage() {
 
           <div className="categories-grid">
             {displayCategories.slice(0, 8).map((category, index) => (
-              <Link
+              <div
                 key={index}
-                to={`/quizzes?category=${encodeURIComponent(category.name)}`}
+                onClick={() => handleCategoryClick(category.name)}
                 className="category-card interactive-element"
                 style={{
                   '--category-color': category.color,
-                  animationDelay: `${index * 0.1}s`
+                  animationDelay: `${index * 0.1}s`,
+                  cursor: 'pointer'
                 }}
               >
                 <span className="category-icon">{category.icon}</span>
                 <h3 className="category-name">{category.name}</h3>
-                <p className="category-count">Explore quizzes</p>
-              </Link>
+                <p className="category-count">
+                  {user ? 'Explore quizzes' : 'Sign in to explore'}
+                </p>
+              </div>
             ))}
           </div>
         </section>
@@ -319,20 +351,35 @@ export default function HomePage() {
             <h2 className="cta-title">Ready to Begin Your Learning Journey?</h2>
             
             <p className="cta-description">
-              Join thousands of learners who are already expanding their knowledge with Curiodex. 
-              Start with our interactive quizzes and discover a new way to learn and grow.
+              {user 
+                ? "Continue your learning adventure with Curiodex. Take on new challenges and expand your knowledge."
+                : "Join thousands of learners who are already expanding their knowledge with Curiodex. Start with our interactive quizzes and discover a new way to learn and grow."
+              }
             </p>
 
             <div className="cta-buttons">
-              <Link to="/quizzes" className="cta-btn-primary">
+              <button 
+                onClick={handleStartLearning}
+                className="cta-btn-primary"
+              >
                 <span>🎯</span>
-                <span>Take Your First Quiz</span>
-              </Link>
+                <span>{user ? 'Continue Learning' : 'Take Your First Quiz'}</span>
+              </button>
               
-              <Link to="/stats" className="cta-btn-secondary">
-                <span>📊</span>
-                <span>View Your Progress</span>
-              </Link>
+              {user ? (
+                <Link to="/stats" className="cta-btn-secondary">
+                  <span>📊</span>
+                  <span>View Your Progress</span>
+                </Link>
+              ) : (
+                <button 
+                  onClick={() => navigate('/login')}
+                  className="cta-btn-secondary"
+                >
+                  <span>🚀</span>
+                  <span>Join Curiodex</span>
+                </button>
+              )}
             </div>
           </div>
         </section>

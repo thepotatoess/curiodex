@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { ConfirmModal } from './ConfirmModal'
 import '../css/QuizPreview.css'
+import QuizComments from './QuizComments'
 
 export default function QuizPreview() {
   const { quizId } = useParams()
@@ -760,7 +761,6 @@ export default function QuizPreview() {
               {!showQuizPreview && (
                 <div className="preview-overlay">
                   <div className="preview-overlay-content">
-                    <div className="overlay-icon">🚀</div>
                     <h3 className="preview-overlay-title">Ready to Test Your Knowledge?</h3>
                     <p className="preview-overlay-text">
                       {userStats 
@@ -810,6 +810,12 @@ export default function QuizPreview() {
                 </button>
               </div>
             )}
+          </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <QuizComments 
+              quizId={quizId} 
+              quizTitle={quiz.title}
+            />
           </div>
         </div>
 
@@ -929,6 +935,7 @@ export default function QuizPreview() {
             </div>
           </div>
         </div>
+        
       </div>
     </div>
   )

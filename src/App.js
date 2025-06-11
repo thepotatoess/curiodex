@@ -1,5 +1,7 @@
+// REPLACE the existing App.js content with this updated version:
+
 import { useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { CategoryProvider } from './contexts/CategoryContext'
 import Auth from './components/Auth'
@@ -15,6 +17,36 @@ import ManageUsers from './components/admin/ManageUsers'
 import CategoryManager from './components/admin/CategoryManager'
 import QuizStats from './components/QuizStats'
 import { ConfirmModal } from './components/ConfirmModal'
+
+// Protected Route Component - redirects to home if not authenticated
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth()
+  
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        color: 'white',
+        fontSize: '1.2rem'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🧠</div>
+          <div>Loading Curiodex...</div>
+        </div>
+      </div>
+    )
+  }
+  
+  if (!user) {
+    return <Navigate to="/" replace />
+  }
+  
+  return children
+}
 
 function AppContent() {
   const { user, profile, loading } = useAuth()
@@ -39,8 +71,6 @@ function AppContent() {
       </div>
     )
   }
-
-  if (!user) return <Auth />
 
   const handleQuizzesNavClick = (e) => {
     if (location.pathname === '/quizzes') {
@@ -71,37 +101,77 @@ function AppContent() {
   return (
     <CategoryProvider>
       <div style={{ minHeight: '100vh', background: '#ffffff' }}>
-        {/* Show navbar on ALL pages including homepage */}
-        <ModernNavbar 
-          onQuizzesNavClick={handleQuizzesNavClick}
-          showNavConfirm={showNavConfirm}
-        />
+        {/* Show navbar only when user is logged in OR on homepage */}
+        {(user || isHomePage) && (
+          <ModernNavbar 
+            onQuizzesNavClick={handleQuizzesNavClick}
+            showNavConfirm={showNavConfirm}
+          />
+        )}
         
-        {/* Main content - always add padding for navbar, clean white background for all pages except homepage */}
+        {/* Main content */}
         <main style={{ 
-          paddingTop: '70px',
+          paddingTop: (user || isHomePage) ? '70px' : '0',
           minHeight: '100vh',
           background: isHomePage ? 'transparent' : '#ffffff'
         }}>
           <Routes>
+            {/* Public Routes */}
             <Route path="/" element={<HomePage />} />
-            <Route path="/quizzes" element={<QuizList />} />
-            <Route path="/quiz/:quizId" element={<QuizDetailPage />} />
-            <Route path="/quiz/:quizId/preview" element={<QuizPreview />} />
+            <Route path="/login" element={<Auth />} />
+            
+            {/* Protected Routes - require authentication */}
+            <Route path="/quizzes" element={
+              <ProtectedRoute>
+                <QuizList />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/quiz/:quizId" element={
+              <ProtectedRoute>
+                <QuizDetailPage />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/quiz/:quizId/preview" element={
+              <ProtectedRoute>
+                <QuizPreview />
+              </ProtectedRoute>
+            } />
+            
             {/* Legacy route for direct play - redirects to preview */}
-            <Route path="/quiz/:quizId/play" element={<QuizPreview />} />
-            <Route path="/stats" element={<QuizStats />} />
-            <Route path="/admin/users" element={<ManageUsers />} />
+            <Route path="/quiz/:quizId/play" element={
+              <ProtectedRoute>
+                <QuizPreview />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/stats" element={
+              <ProtectedRoute>
+                <QuizStats />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/admin/users" element={
+              <ProtectedRoute>
+                <ManageUsers />
+              </ProtectedRoute>
+            } />
             
             <Route path="/admin/*" element={
-              <AdminRoute>
-                <Routes>
-                  <Route path="/" element={<AdminDashboard />} />
-                  <Route path="/categories" element={<CategoryManager />} />
-                  <Route path="/quizzes" element={<QuizManager />} />
-                </Routes>
-              </AdminRoute>
+              <ProtectedRoute>
+                <AdminRoute>
+                  <Routes>
+                    <Route path="/" element={<AdminDashboard />} />
+                    <Route path="/categories" element={<CategoryManager />} />
+                    <Route path="/quizzes" element={<QuizManager />} />
+                  </Routes>
+                </AdminRoute>
+              </ProtectedRoute>
             } />
+            
+            {/* Catch all route - redirect to home */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
 
