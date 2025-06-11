@@ -5,6 +5,58 @@
   padding: var(--spacing-lg);
 }
 
+/* ========== Timer Display ========== */
+.timer-display {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: white;
+  border: 3px solid;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: 20px;
+  font-weight: bold;
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 140px;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.timer-display.urgent {
+  animation: timerPulse 1s infinite;
+  transform: scale(1.05);
+}
+
+.timer-icon {
+  font-size: 24px;
+}
+
+@keyframes timerPulse {
+  0% { transform: scale(1.05); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1.05); }
+}
+
+/* ========== Time Up Message ========== */
+.time-up-message {
+  animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 /* ========== Quiz Header ========== */
 .quiz-header {
   margin-bottom: var(--spacing-lg);
@@ -94,9 +146,10 @@
   position: relative;
 }
 
-.answer-option:hover {
+.answer-option:hover:not(.disabled) {
   border-color: var(--gray-400);
   background-color: var(--gray-50);
+  transform: translateY(-1px);
 }
 
 .answer-option.selected {
@@ -119,6 +172,7 @@
 .answer-option.disabled {
   pointer-events: none;
   cursor: default;
+  opacity: 0.7;
 }
 
 /* ========== Answer Radio Button ========== */
@@ -153,11 +207,37 @@
   color: var(--danger-color);
 }
 
+/* ========== Question Explanation ========== */
+.question-explanation {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-md);
+  background-color: #f0f9ff;
+  border-left: 4px solid #3b82f6;
+  border-radius: var(--radius-sm);
+}
+
+.question-explanation h4 {
+  margin: 0 0 var(--spacing-sm) 0;
+  color: #1e40af;
+  font-size: 16px;
+}
+
+.question-explanation p {
+  margin: 0;
+  color: #1e3a8a;
+  line-height: 1.5;
+}
+
 /* ========== Question Points ========== */
 .question-points {
   margin-top: var(--spacing-md);
   font-size: 14px;
   color: var(--gray-600);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--gray-200);
 }
 
 /* ========== Navigation ========== */
@@ -283,6 +363,13 @@
     padding: var(--spacing-md);
   }
   
+  .timer-display {
+    position: static;
+    margin-bottom: var(--spacing-lg);
+    width: 100%;
+    font-size: 18px;
+  }
+  
   .question-card {
     padding: var(--spacing-lg);
   }
@@ -310,5 +397,11 @@
   
   .nav-btn {
     width: 100%;
+  }
+  
+  .question-points {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    align-items: flex-start;
   }
 }

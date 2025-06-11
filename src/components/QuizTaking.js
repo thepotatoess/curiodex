@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { ConfirmModal } from './ConfirmModal'
@@ -22,6 +22,11 @@ export default function QuizTaking() {
   const [isNewRecord, setIsNewRecord] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   
+  // Timer states
+  const [timeRemaining, setTimeRemaining] = useState(0)
+  const [isTimerActive, setIsTimerActive] = useState(false)
+  const timerRef = useRef(null)
+  
   const currentQ = questions[currentQuestion] || null
   const isAnswered = currentQ ? answers[currentQ.id] !== undefined : false
 
@@ -30,6 +35,36 @@ export default function QuizTaking() {
       loadQuiz()
     }
   }, [quizId])
+
+  // Timer effect
+  useEffect(() => {
+    if (currentQ && isTimerActive && timeRemaining > 0) {
+      timerRef.current = setInterval(() => {
+        setTimeRemaining(prev => {
+          if (prev <= 1) {
+            // Time's up - auto advance to next question or submit
+            handleTimeUp()
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    } else {
+      clearInterval(timerRef.current)
+    }
+
+    return () => clearInterval(timerRef.current)
+  }, [currentQuestion, isTimerActive, timeRemaining])
+
+  // Start timer when question changes
+  useEffect(() => {
+    if (currentQ && !isAnswered) {
+      setTimeRemaining(currentQ.time_limit_seconds || 30)
+      setIsTimerActive(true)
+    } else {
+      setIsTimerActive(false)
+    }
+  }, [currentQuestion, currentQ])
 
   const loadQuiz = async () => {
     try {
@@ -52,10 +87,11 @@ export default function QuizTaking() {
 
       if (questionsError) throw questionsError
 
-      // Parse options JSON
+      // Parse options JSON and ensure time_limit_seconds is set
       const parsedQuestions = questionsData.map(q => ({
         ...q,
-        options: JSON.parse(q.options || '[]')
+        options: JSON.parse(q.options || '[]'),
+        time_limit_seconds: q.time_limit_seconds || 30
       }))
 
       // Fetch user's previous attempts
@@ -92,21 +128,41 @@ export default function QuizTaking() {
       ...answers,
       [questionId]: answer
     })
+    // Stop timer when answer is selected
+    setIsTimerActive(false)
+  }
+
+  const handleTimeUp = () => {
+    // Auto-advance to next question or submit quiz
+    setIsTimerActive(false)
+    
+    if (currentQuestion < questions.length - 1) {
+      setTimeout(() => {
+        nextQuestion()
+      }, 1000) // Brief delay to show time's up
+    } else {
+      setTimeout(() => {
+        submitQuiz()
+      }, 1000)
+    }
   }
 
   const nextQuestion = () => {
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1)
+      setIsTimerActive(true)
     }
   }
 
   const prevQuestion = () => {
     if (currentQuestion > 0) {
       setCurrentQuestion(currentQuestion - 1)
+      setIsTimerActive(false) // Don't restart timer on previous questions
     }
   }
 
   const handleCancelClick = () => {
+    setIsTimerActive(false)
     setShowCancelConfirm(true)
   }
 
@@ -116,6 +172,7 @@ export default function QuizTaking() {
   }
 
   const submitQuiz = async () => {
+    setIsTimerActive(false)
     setSubmitting(true)
 
     try {
@@ -182,6 +239,8 @@ export default function QuizTaking() {
     setShowResults(false)
     setResults(null)
     setIsNewRecord(false)
+    setTimeRemaining(0)
+    setIsTimerActive(false)
     // Update start time for new attempt
     window.location.reload() // Simple way to reset the start time
   }
@@ -192,6 +251,21 @@ export default function QuizTaking() {
 
   const handleBackToQuizzes = () => {
     navigate('/quizzes')
+  }
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const getTimerColor = () => {
+    const total = currentQ?.time_limit_seconds || 30
+    const percentage = (timeRemaining / total) * 100
+    
+    if (percentage > 50) return '#10b981' // Green
+    if (percentage > 25) return '#f59e0b' // Yellow
+    return '#ef4444' // Red
   }
 
   if (loading) return <div className="quiz-loading">Loading quiz...</div>
@@ -224,6 +298,17 @@ export default function QuizTaking() {
 
   return (
     <div className="quiz-taking-container">
+      {/* Timer Display */}
+      {isTimerActive && (
+        <div 
+          className={`timer-display ${timeRemaining <= 10 ? 'urgent' : ''}`}
+          style={{ borderColor: getTimerColor(), color: getTimerColor() }}
+        >
+          <span className="timer-icon">⏱️</span>
+          <span>{formatTime(timeRemaining)}</span>
+        </div>
+      )}
+
       <div className="quiz-header">
         <h1>{quiz.title}</h1>
         <p>{quiz.description}</p>
@@ -255,9 +340,8 @@ export default function QuizTaking() {
               } else if (isSelected) {
                 optionClass += ' incorrect'
               } else {
-                optionClass += ' incorrect'
+                optionClass += ' disabled'
               }
-              optionClass += ' disabled'
             } else if (isSelected) {
               optionClass += ' selected'
             }
@@ -270,7 +354,7 @@ export default function QuizTaking() {
                   value={option}
                   checked={isSelected}
                   onChange={(e) => handleAnswer(currentQ.id, e.target.value)}
-                  disabled={showFeedback}
+                  disabled={showFeedback || timeRemaining === 0}
                   className="answer-radio"
                 />
                 <span className="answer-text">
@@ -287,15 +371,31 @@ export default function QuizTaking() {
           })}
         </div>
 
-        {isAnswered && currentQ.explanation &&  (
-          <div className="question-description">
+        {isAnswered && currentQ.explanation && (
+          <div className="question-explanation">
+            <h4>Explanation:</h4>
             <p>{currentQ.explanation}</p>
           </div>
         )}
 
         <div className="question-points">
-          Points: {currentQ.points}
+          Points: {currentQ.points} | Time Limit: {currentQ.time_limit_seconds}s
         </div>
+
+        {timeRemaining === 0 && !isAnswered && (
+          <div className="time-up-message" style={{ 
+            color: '#ef4444', 
+            fontWeight: 'bold', 
+            textAlign: 'center',
+            margin: '1rem 0',
+            padding: '0.5rem',
+            background: '#fef2f2',
+            borderRadius: '4px',
+            border: '1px solid #fecaca'
+          }}>
+            ⏰ Time's up! Moving to next question...
+          </div>
+        )}
       </div>
 
       <div className="quiz-navigation">
@@ -320,7 +420,7 @@ export default function QuizTaking() {
           {currentQuestion === questions.length - 1 ? (
             <button
               onClick={submitQuiz}
-              disabled={submitting || !answers[currentQ.id]}
+              disabled={submitting}
               className="nav-btn nav-btn-submit"
             >
               {submitting ? 'Submitting...' : 'Submit Quiz'}
@@ -328,7 +428,7 @@ export default function QuizTaking() {
           ) : (
             <button
               onClick={nextQuestion}
-              disabled={!answers[currentQ.id]}
+              disabled={!answers[currentQ.id] && timeRemaining > 0}
               className="nav-btn nav-btn-next"
             >
               Next
@@ -357,7 +457,10 @@ export default function QuizTaking() {
           </div>
         }
         onConfirm={confirmCancel}
-        onCancel={() => setShowCancelConfirm(false)}
+        onCancel={() => {
+          setShowCancelConfirm(false)
+          setIsTimerActive(true) // Resume timer when cancelling the cancel dialog
+        }}
         confirmText="Cancel Quiz"
         cancelText="Continue Quiz"
         danger={true}

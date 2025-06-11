@@ -42,7 +42,8 @@ export default function QuizForm({ onSuccess, onCancel, quiz = null }) {
       options: ['', '', '', ''],
       correct_answer: '',
       explanation: '',
-      points: 10
+      points: 10,
+      time_limit_seconds: 30 // Default time limit
     }])
   }
 
@@ -116,6 +117,7 @@ export default function QuizForm({ onSuccess, onCancel, quiz = null }) {
           correct_answer: q.correct_answer,
           explanation: q.explanation,
           points: q.points,
+          time_limit_seconds: q.time_limit_seconds || 30,
           order_index: index
         }))
 
@@ -259,7 +261,7 @@ export default function QuizForm({ onSuccess, onCancel, quiz = null }) {
               ))}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '5px' }}>Correct Answer *</label>
                 <select
@@ -284,6 +286,18 @@ export default function QuizForm({ onSuccess, onCancel, quiz = null }) {
                   value={question.points}
                   onChange={(e) => updateQuestion(qIndex, 'points', parseInt(e.target.value))}
                   min="1"
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px' }}>Time Limit (seconds)</label>
+                <input
+                  type="number"
+                  value={question.time_limit_seconds || 30}
+                  onChange={(e) => updateQuestion(qIndex, 'time_limit_seconds', parseInt(e.target.value))}
+                  min="5"
+                  max="300"
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
                 />
               </div>

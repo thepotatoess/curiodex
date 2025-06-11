@@ -85,20 +85,19 @@ export default function QuizList() {
     }
   }
 
-  // Updated: Now clicking on quiz card starts the quiz
+  // Updated: Now clicking on quiz card goes to preview page
   const handleQuizClick = (quizId) => {
-    navigate(`/quiz/${quizId}/play`)
+    navigate(`/quiz/${quizId}/preview`)
   }
 
-  // New function: Handle viewing quiz details
+  // Function: Handle viewing quiz details
   const handleViewDetails = (e, quizId) => {
     e.stopPropagation() // Prevent the card click event
     navigate(`/quiz/${quizId}`)
   }
 
-  // Renamed for clarity - this is now redundant with handleQuizClick but keeping for consistency
-  const handleQuickStart = (e, quizId) => {
-    e.stopPropagation() // Prevent the card click event
+  // Function: Direct play (skip preview) - used for random quiz
+  const handleDirectPlay = (quizId) => {
     navigate(`/quiz/${quizId}/play`)
   }
 
@@ -164,7 +163,7 @@ export default function QuizList() {
     
     const randomIndex = Math.floor(Math.random() * filteredQuizzes.length)
     const randomQuiz = filteredQuizzes[randomIndex]
-    navigate(`/quiz/${randomQuiz.id}/play`)
+    handleDirectPlay(randomQuiz.id) // Skip preview for random quiz
   }
 
   if (loading) return <div className="quiz-loading">Loading quizzes...</div>
@@ -267,7 +266,7 @@ export default function QuizList() {
             {selectedPlayedStatus !== 'all' && <span> ({selectedPlayedStatus})</span>}
           </p>
         ) : (
-          <p>Showing all {quizzes.length} quizzes • Click on any quiz to start immediately</p>
+          <p>Showing all {quizzes.length} quizzes • Click on any quiz to see preview and start</p>
         )}
       </div>
 
@@ -334,6 +333,11 @@ export default function QuizList() {
                             </div>
                           )}
 
+                          {/* Hint for new quiz flow */}
+                          <div className="quiz-card-hint">
+                            <span className="hint-icon">💡</span>
+                            <span className="hint-text">Click to preview questions and start quiz</span>
+                          </div>
                         </div>
 
                         <div className="quiz-actions">
