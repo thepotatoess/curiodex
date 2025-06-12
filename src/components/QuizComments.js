@@ -344,9 +344,6 @@ const handleDeleteCommentWithFunction = async () => {
 
     setDeleteModal({ isOpen: false, commentId: null })
     
-    // Show success message
-    alert('Comment deleted successfully!')
-    
   } catch (error) {
     console.error('Error in handleDeleteCommentWithFunction:', error)
     alert(`Failed to delete comment: ${error.message}`)

@@ -400,12 +400,6 @@ export default function QuizList() {
                               | <strong>Attempts:</strong> {userBest.attempts}
                             </div>
                           )}
-
-                          {/* Hint for new quiz flow */}
-                          <div className="quiz-card-hint">
-                            <span className="hint-icon">💡</span>
-                            <span className="hint-text">Click to preview questions and start quiz</span>
-                          </div>
                         </div>
 
                         <div className="quiz-actions">
