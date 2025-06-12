@@ -42,13 +42,82 @@ export default function EnhancedQuizManager() {
 
   // Load data on mount
   useEffect(() => {
-    loadQuizzes()
+    loadQuizzes2()
   }, [])
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm, categoryFilter, difficultyFilter, statusFilter])
+
+  const loadQuizzes2 = async () => {
+    try {
+      setLoading(true)
+      
+      // Simplified query - let's start with basic quiz data only
+      const { data: quizzesData, error: quizzesError } = await supabase
+        .from('quizzes')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (quizzesError) {
+        console.error('Quiz query error:', quizzesError)
+        throw quizzesError
+      }
+
+      console.log('Loaded quizzes:', quizzesData) // Debug log
+
+      // Load questions count separately for each quiz
+      const quizzesWithCounts = await Promise.all(
+        (quizzesData || []).map(async (quiz) => {
+          try {
+            // Get question count
+            const { data: questionsData, error: questionsError } = await supabase
+              .from('questions')
+              .select('id')
+              .eq('quiz_id', quiz.id)
+
+            if (questionsError) {
+              console.warn(`Error loading questions for quiz ${quiz.id}:`, questionsError)
+            }
+
+            // Get play count
+            const { data: attemptsData, error: attemptsError } = await supabase
+              .from('user_quiz_attempts')
+              .select('id')
+              .eq('quiz_id', quiz.id)
+
+            if (attemptsError) {
+              console.warn(`Error loading attempts for quiz ${quiz.id}:`, attemptsError)
+            }
+
+            return {
+              ...quiz,
+              question_count: questionsData?.length || 0,
+              play_count: attemptsData?.length || 0
+            }
+          } catch (error) {
+            console.error(`Error processing quiz ${quiz.id}:`, error)
+            return {
+              ...quiz,
+              question_count: 0,
+              play_count: 0
+            }
+          }
+        })
+      )
+
+      setQuizzes(quizzesWithCounts)
+      
+    } catch (error) {
+      console.error('Error loading quizzes:', error)
+      addToast('Failed to load quizzes: ' + error.message, 'error')
+      // Set empty array on error to prevent crashes
+      setQuizzes([])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const loadQuizzes = async () => {
     try {
@@ -267,7 +336,7 @@ export default function EnhancedQuizManager() {
         'success'
       )
       
-      loadQuizzes()
+      loadQuizzes2()
       clearSelection()
       refreshCategories()
     } catch (error) {
@@ -293,7 +362,7 @@ export default function EnhancedQuizManager() {
         'success'
       )
       
-      loadQuizzes()
+      loadQuizzes2()
       clearSelection()
       refreshCategories()
     } catch (error) {
@@ -305,7 +374,7 @@ export default function EnhancedQuizManager() {
   const handleFormSuccess = (message) => {
     setShowForm(false)
     setEditingQuiz(null)
-    loadQuizzes()
+    loadQuizzes2()
     addToast(message, 'success')
     refreshCategories()
   }
@@ -394,7 +463,7 @@ export default function EnhancedQuizManager() {
               </button>
               
               <button 
-                onClick={loadQuizzes}
+                onClick={loadQuizzes2}
                 className="btn btn-secondary"
               >
                 <span>🔄</span>
