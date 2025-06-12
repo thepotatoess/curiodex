@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useCategories } from '../../contexts/CategoryContext'
-import QuizForm from './QuizForm'
+import EnhancedQuizForm from './EnhancedQuizForm'
 import QuizTableRow from './QuizTableRow'
 import Pagination from './Pagination'
 import QuizFilters from './QuizFilters'
@@ -119,111 +119,76 @@ export default function EnhancedQuizManager() {
     }
   }
 
-  const loadQuizzes = async () => {
-    try {
-      setLoading(true)
-      
-      const { data, error } = await supabase
-        .from('quizzes')
-        .select(`
-          *,
-          questions(id, points),
-          user_quiz_attempts(id, user_id),
-          profiles!quizzes_created_by_fkey(username, email)
-        `)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-
-      // Process quiz data with enhanced metadata
-      const processedQuizzes = data.map(quiz => {
-        const uniqueUsers = new Set(quiz.user_quiz_attempts?.map(a => a.user_id) || [])
-        
-        return {
-          ...quiz,
-          question_count: quiz.questions?.length || 0,
-          total_points: quiz.questions?.reduce((sum, q) => sum + (q.points || 0), 0) || 0,
-          total_attempts: quiz.user_quiz_attempts?.length || 0,
-          unique_players: uniqueUsers.size,
-          creator_name: quiz.profiles?.username || quiz.profiles?.email || 'Unknown',
-          // Calculate average score if there are attempts
-          average_score: quiz.user_quiz_attempts?.length > 0 
-            ? Math.round(quiz.user_quiz_attempts.reduce((sum, attempt) => {
-                return sum + (attempt.score / attempt.max_score) * 100
-              }, 0) / quiz.user_quiz_attempts.length)
-            : 0
-        }
-      })
-
-      setQuizzes(processedQuizzes)
-    } catch (error) {
-      console.error('Error loading quizzes:', error)
-      addToast('Failed to load quizzes', 'error')
-    } finally {
-      setLoading(false)
+  // Quiz statistics calculation
+  const stats = useMemo(() => {
+    return {
+      total: quizzes.length,
+      published: quizzes.filter(q => q.is_published).length,
+      drafts: quizzes.filter(q => !q.is_published).length,
+      totalAttempts: quizzes.reduce((sum, q) => sum + (q.play_count || 0), 0)
     }
-  }
+  }, [quizzes])
 
-  // Filtered and sorted quizzes
+  // Filtering logic
   const filteredQuizzes = useMemo(() => {
-    let filtered = quizzes.filter(quiz => {
-      const matchesSearch = searchTerm === '' || 
+    return quizzes.filter(quiz => {
+      const matchesSearch = !searchTerm || 
         quiz.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        quiz.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        quiz.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        quiz.creator_name.toLowerCase().includes(searchTerm.toLowerCase())
+        quiz.description?.toLowerCase().includes(searchTerm.toLowerCase())
       
       const matchesCategory = categoryFilter === 'all' || quiz.category === categoryFilter
       const matchesDifficulty = difficultyFilter === 'all' || quiz.difficulty === difficultyFilter
       const matchesStatus = statusFilter === 'all' || 
         (statusFilter === 'published' && quiz.is_published) ||
         (statusFilter === 'draft' && !quiz.is_published)
-      
+
       return matchesSearch && matchesCategory && matchesDifficulty && matchesStatus
     })
+  }, [quizzes, searchTerm, categoryFilter, difficultyFilter, statusFilter])
 
-    // Sort the filtered results
-    filtered.sort((a, b) => {
+  // Sorting logic
+  const sortedQuizzes = useMemo(() => {
+    return [...filteredQuizzes].sort((a, b) => {
       let aValue = a[sortField]
       let bValue = b[sortField]
-      
-      // Handle different data types
+
+      // Handle date fields
+      if (sortField === 'created_at' || sortField === 'updated_at') {
+        aValue = new Date(aValue).getTime()
+        bValue = new Date(bValue).getTime()
+      }
+
+      // Handle string fields
       if (typeof aValue === 'string') {
         aValue = aValue.toLowerCase()
         bValue = bValue.toLowerCase()
       }
-      
+
       if (sortDirection === 'asc') {
         return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
       } else {
         return aValue > bValue ? -1 : aValue < bValue ? 1 : 0
       }
     })
+  }, [filteredQuizzes, sortField, sortDirection])
 
-    return filtered
-  }, [quizzes, searchTerm, categoryFilter, difficultyFilter, statusFilter, sortField, sortDirection])
-
-  // Paginated quizzes
+  // Pagination logic
   const paginatedQuizzes = useMemo(() => {
-    const start = (currentPage - 1) * pageSize
-    const end = start + pageSize
-    return filteredQuizzes.slice(start, end)
-  }, [filteredQuizzes, currentPage, pageSize])
+    const startIndex = (currentPage - 1) * pageSize
+    return sortedQuizzes.slice(startIndex, startIndex + pageSize)
+  }, [sortedQuizzes, currentPage, pageSize])
 
-  // Statistics
-  const stats = useMemo(() => {
-    return {
-      total: quizzes.length,
-      published: quizzes.filter(q => q.is_published).length,
-      drafts: quizzes.filter(q => !q.is_published).length,
-      totalAttempts: quizzes.reduce((sum, q) => sum + q.total_attempts, 0)
-    }
-  }, [quizzes])
+  const totalPages = Math.ceil(sortedQuizzes.length / pageSize)
 
-  // Pagination info
-  const totalPages = Math.ceil(filteredQuizzes.length / pageSize)
-  const startItem = (currentPage - 1) * pageSize + 1
-  const endItem = Math.min(currentPage * pageSize, filteredQuizzes.length)
+  // Active filters for display
+  const activeFilters = useMemo(() => {
+    const filters = []
+    if (searchTerm) filters.push({ type: 'search', value: searchTerm, label: `Search: "${searchTerm}"` })
+    if (categoryFilter !== 'all') filters.push({ type: 'category', value: categoryFilter, label: `Category: ${categoryFilter}` })
+    if (difficultyFilter !== 'all') filters.push({ type: 'difficulty', value: difficultyFilter, label: `Difficulty: ${difficultyFilter}` })
+    if (statusFilter !== 'all') filters.push({ type: 'status', value: statusFilter, label: `Status: ${statusFilter}` })
+    return filters
+  }, [searchTerm, categoryFilter, difficultyFilter, statusFilter])
 
   // Event handlers
   const handleSort = useCallback((field) => {
@@ -270,6 +235,23 @@ export default function EnhancedQuizManager() {
     setSelectAll(false)
   }
 
+  const removeFilter = (filterType) => {
+    switch (filterType) {
+      case 'search':
+        setSearchTerm('')
+        break
+      case 'category':
+        setCategoryFilter('all')
+        break
+      case 'difficulty':
+        setDifficultyFilter('all')
+        break
+      case 'status':
+        setStatusFilter('all')
+        break
+    }
+  }
+
   // CRUD Operations
   const handleEdit = async (quiz) => {
     try {
@@ -286,10 +268,20 @@ export default function EnhancedQuizManager() {
 
       const quizWithParsedQuestions = {
         ...data,
-        questions: data.questions.map(q => ({
-          ...q,
-          options: JSON.parse(q.options || '[]')
-        }))
+        questions: data.questions.map(q => {
+          const parsed = { ...q }
+          
+          // Parse different question type data
+          if (q.question_type === 'multiple_choice' && q.options) {
+            parsed.options = JSON.parse(q.options)
+          }
+          
+          if (q.question_type === 'map_click' && q.map_data) {
+            parsed.map_data = JSON.parse(q.map_data)
+          }
+          
+          return parsed
+        })
       }
 
       setEditingQuiz(quizWithParsedQuestions)
@@ -331,51 +323,57 @@ export default function EnhancedQuizManager() {
 
       addToast(
         isMultiple 
-          ? `${quizIds.length} quizzes deleted successfully` 
-          : 'Quiz deleted successfully', 
+          ? `${quizIds.length} quizzes deleted successfully`
+          : 'Quiz deleted successfully',
         'success'
       )
       
       loadQuizzes2()
       clearSelection()
-      refreshCategories()
     } catch (error) {
-      console.error('Error deleting quiz(es):', error)
-      addToast('Failed to delete quiz(es): ' + error.message, 'error')
+      console.error('Error deleting quiz(zes):', error)
+      addToast('Failed to delete quiz(zes)', 'error')
     }
   }
 
-  const handleBulkPublish = async (action) => {
-    const selectedQuizList = quizzes.filter(q => selectedQuizzes.has(q.id))
-    const isPublish = action === 'publish'
-    
+  const handleBulkAction = async (action, quizIds) => {
     try {
-      const { error } = await supabase
-        .from('quizzes')
-        .update({ is_published: isPublish })
-        .in('id', Array.from(selectedQuizzes))
+      const updateData = {}
+      
+      if (action === 'publish') {
+        updateData.is_published = true
+      } else if (action === 'unpublish') {
+        updateData.is_published = false
+      }
 
-      if (error) throw error
+      for (const quizId of quizIds) {
+        const { error } = await supabase
+          .from('quizzes')
+          .update(updateData)
+          .eq('id', quizId)
+
+        if (error) throw error
+      }
 
       addToast(
-        `${selectedQuizList.length} quizzes ${isPublish ? 'published' : 'unpublished'} successfully`,
+        `${quizIds.length} quiz${quizIds.length > 1 ? 'es' : ''} ${action}ed successfully`,
         'success'
       )
       
       loadQuizzes2()
       clearSelection()
-      refreshCategories()
     } catch (error) {
-      console.error('Error updating quiz status:', error)
-      addToast('Failed to update quiz status: ' + error.message, 'error')
+      console.error(`Error ${action}ing quizzes:`, error)
+      addToast(`Failed to ${action} quizzes`, 'error')
     }
   }
 
+  // Form handlers
   const handleFormSuccess = (message) => {
+    addToast(message, 'success')
     setShowForm(false)
     setEditingQuiz(null)
     loadQuizzes2()
-    addToast(message, 'success')
     refreshCategories()
   }
 
@@ -384,27 +382,11 @@ export default function EnhancedQuizManager() {
     setEditingQuiz(null)
   }
 
-  // Get active filters for display
-  const activeFilters = []
-  if (searchTerm) activeFilters.push({ type: 'search', value: searchTerm })
-  if (categoryFilter !== 'all') activeFilters.push({ type: 'category', value: categoryFilter })
-  if (difficultyFilter !== 'all') activeFilters.push({ type: 'difficulty', value: difficultyFilter })
-  if (statusFilter !== 'all') activeFilters.push({ type: 'status', value: statusFilter })
-
-  const removeFilter = (filterType) => {
-    switch (filterType) {
-      case 'search': setSearchTerm(''); break
-      case 'category': setCategoryFilter('all'); break
-      case 'difficulty': setDifficultyFilter('all'); break
-      case 'status': setStatusFilter('all'); break
-    }
-  }
-
-  // Show form if editing or creating
+  // Show form when creating/editing
   if (showForm) {
     return (
       <>
-        <QuizForm 
+        <EnhancedQuizForm
           quiz={editingQuiz}
           onSuccess={handleFormSuccess}
           onCancel={handleFormCancel}
@@ -583,7 +565,15 @@ export default function EnhancedQuizManager() {
                         {sortField === 'title' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
                       </span>
                     </th>
-                    <th>Category</th>
+                    <th 
+                      className="sortable"
+                      onClick={() => handleSort('category')}
+                    >
+                      Category
+                      <span className={`sort-indicator ${sortField === 'category' ? 'active' : ''}`}>
+                        {sortField === 'category' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
+                      </span>
+                    </th>
                     <th 
                       className="sortable"
                       onClick={() => handleSort('difficulty')}
@@ -593,16 +583,8 @@ export default function EnhancedQuizManager() {
                         {sortField === 'difficulty' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
                       </span>
                     </th>
-                    <th 
-                      className="sortable"
-                      onClick={() => handleSort('is_published')}
-                    >
-                      Status
-                      <span className={`sort-indicator ${sortField === 'is_published' ? 'active' : ''}`}>
-                        {sortField === 'is_published' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
-                      </span>
-                    </th>
-                    <th>Performance</th>
+                    <th>Status</th>
+                    <th>Stats</th>
                     <th 
                       className="sortable"
                       onClick={() => handleSort('created_at')}
@@ -616,7 +598,7 @@ export default function EnhancedQuizManager() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedQuizzes.map((quiz) => (
+                  {paginatedQuizzes.map(quiz => (
                     <QuizTableRow
                       key={quiz.id}
                       quiz={quiz}
@@ -624,7 +606,6 @@ export default function EnhancedQuizManager() {
                       onSelect={handleSelectQuiz}
                       onEdit={handleEdit}
                       onDelete={(quiz) => setDeleteModal({ isOpen: true, quizzes: [quiz] })}
-                      availableCategories={availableCategories}
                     />
                   ))}
                 </tbody>
@@ -636,131 +617,74 @@ export default function EnhancedQuizManager() {
               currentPage={currentPage}
               totalPages={totalPages}
               pageSize={pageSize}
-              totalItems={filteredQuizzes.length}
+              totalItems={sortedQuizzes.length}
               onPageChange={setCurrentPage}
-              onPageSizeChange={(newSize) => {
-                setPageSize(newSize)
-                setCurrentPage(1)
-              }}
+              onPageSizeChange={setPageSize}
             />
           </>
         )}
+
+        {/* Delete Confirmation Modal */}
+        <ConfirmModal
+          isOpen={deleteModal.isOpen}
+          title="Delete Quiz"
+          message={
+            <div>
+              <p>Are you sure you want to delete this quiz?</p>
+              <p style={{ color: '#dc3545', fontWeight: 'bold' }}>
+                This will also delete all questions and user attempts. This action cannot be undone.
+              </p>
+            </div>
+          }
+          onConfirm={() => {
+            handleDelete(deleteModal.quizzes)
+            setDeleteModal({ isOpen: false, quizzes: [] })
+          }}
+          onCancel={() => setDeleteModal({ isOpen: false, quizzes: [] })}
+          confirmText="Delete Quiz"
+          danger={true}
+        />
+
+        {/* Bulk Delete Confirmation Modal */}
+        <ConfirmModal
+          isOpen={bulkDeleteModal.isOpen}
+          title="Delete Selected Quizzes"
+          message={
+            <div>
+              <p>Are you sure you want to delete {selectedQuizzes.size} selected quiz{selectedQuizzes.size > 1 ? 'es' : ''}?</p>
+              <p style={{ color: '#dc3545', fontWeight: 'bold' }}>
+                This will also delete all questions and user attempts. This action cannot be undone.
+              </p>
+            </div>
+          }
+          onConfirm={() => {
+            const selectedQuizObjects = paginatedQuizzes.filter(q => selectedQuizzes.has(q.id))
+            handleDelete(selectedQuizObjects)
+            setBulkDeleteModal({ isOpen: false })
+          }}
+          onCancel={() => setBulkDeleteModal({ isOpen: false })}
+          confirmText="Delete Quizzes"
+          danger={true}
+        />
+
+        {/* Publish/Unpublish Confirmation Modal */}
+        <ConfirmModal
+          isOpen={publishModal.isOpen}
+          title={`${publishModal.action === 'publish' ? 'Publish' : 'Unpublish'} Selected Quizzes`}
+          message={
+            <p>
+              Are you sure you want to {publishModal.action} {selectedQuizzes.size} selected quiz{selectedQuizzes.size > 1 ? 'es' : ''}?
+            </p>
+          }
+          onConfirm={() => {
+            handleBulkAction(publishModal.action, Array.from(selectedQuizzes))
+            setPublishModal({ isOpen: false, action: 'publish' })
+          }}
+          onCancel={() => setPublishModal({ isOpen: false, action: 'publish' })}
+          confirmText={publishModal.action === 'publish' ? 'Publish' : 'Unpublish'}
+        />
       </div>
-
-      {/* Delete Confirmation Modal */}
-      <ConfirmModal
-        isOpen={deleteModal.isOpen}
-        title={`Delete Quiz${deleteModal.quizzes.length > 1 ? 'es' : ''}?`}
-        message={
-          <div>
-            <p>
-              Are you sure you want to delete <strong>
-                {deleteModal.quizzes.length === 1 
-                  ? `"${deleteModal.quizzes[0]?.title}"`
-                  : `${deleteModal.quizzes.length} quizzes`
-                }
-              </strong>?
-            </p>
-            
-            <div style={{ 
-              background: '#fef2f2', 
-              border: '1px solid #fecaca', 
-              borderRadius: '6px', 
-              padding: '12px', 
-              margin: '12px 0',
-              color: '#991b1b'
-            }}>
-              <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>⚠️ WARNING:</p>
-              <p style={{ margin: '0 0 4px 0' }}>This will permanently delete:</p>
-              <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
-                <li>The quiz{deleteModal.quizzes.length > 1 ? 'es' : ''} and all questions</li>
-                <li>ALL user attempts and scores</li>
-                <li>This action cannot be undone</li>
-              </ul>
-            </div>
-            
-            {deleteModal.quizzes.length === 1 && deleteModal.quizzes[0] && (
-              <p style={{ margin: '8px 0 0 0', fontSize: '14px', color: '#6b7280' }}>
-                This quiz has been played <strong>{deleteModal.quizzes[0].total_attempts}</strong> times 
-                by <strong>{deleteModal.quizzes[0].unique_players}</strong> unique players.
-              </p>
-            )}
-          </div>
-        }
-        onConfirm={() => {
-          handleDelete(deleteModal.quizzes)
-          setDeleteModal({ isOpen: false, quizzes: [] })
-        }}
-        onCancel={() => setDeleteModal({ isOpen: false, quizzes: [] })}
-        confirmText="Delete Everything"
-        danger={true}
-      />
-
-      {/* Bulk Delete Modal */}
-      <ConfirmModal
-        isOpen={bulkDeleteModal.isOpen}
-        title="Delete Selected Quizzes?"
-        message={
-          <div>
-            <p>
-              Are you sure you want to delete <strong>{selectedQuizzes.size} quizzes</strong>?
-            </p>
-            
-            <div style={{ 
-              background: '#fef2f2', 
-              border: '1px solid #fecaca', 
-              borderRadius: '6px', 
-              padding: '12px', 
-              margin: '12px 0',
-              color: '#991b1b'
-            }}>
-              <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>⚠️ WARNING:</p>
-              <p style={{ margin: '0' }}>
-                This will permanently delete all selected quizzes, their questions, 
-                and ALL associated user attempts. This action cannot be undone.
-              </p>
-            </div>
-          </div>
-        }
-        onConfirm={() => {
-          const selectedQuizList = quizzes.filter(q => selectedQuizzes.has(q.id))
-          handleDelete(selectedQuizList)
-          setBulkDeleteModal({ isOpen: false })
-        }}
-        onCancel={() => setBulkDeleteModal({ isOpen: false })}
-        confirmText="Delete All Selected"
-        danger={true}
-      />
-
-      {/* Bulk Publish Modal */}
-      <ConfirmModal
-        isOpen={publishModal.isOpen}
-        title={`${publishModal.action === 'publish' ? 'Publish' : 'Unpublish'} Selected Quizzes?`}
-        message={
-          <div>
-            <p>
-              Are you sure you want to <strong>
-                {publishModal.action === 'publish' ? 'publish' : 'unpublish'}
-              </strong> {selectedQuizzes.size} quizzes?
-            </p>
-            
-            <p style={{ margin: '8px 0 0 0', fontSize: '14px', color: '#6b7280' }}>
-              {publishModal.action === 'publish' 
-                ? 'Published quizzes will become visible to all users and can be taken.'
-                : 'Unpublished quizzes will become drafts and won\'t be visible to users.'
-              }
-            </p>
-          </div>
-        }
-        onConfirm={() => {
-          handleBulkPublish(publishModal.action)
-          setPublishModal({ isOpen: false, action: 'publish' })
-        }}
-        onCancel={() => setPublishModal({ isOpen: false, action: 'publish' })}
-        confirmText={publishModal.action === 'publish' ? 'Publish Selected' : 'Unpublish Selected'}
-        danger={false}
-      />
-
+      
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
   )

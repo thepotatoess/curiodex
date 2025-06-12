@@ -1,5 +1,3 @@
-// REPLACE the existing App.js content with this updated version:
-
 import { useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
