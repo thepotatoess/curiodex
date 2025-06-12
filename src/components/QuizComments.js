@@ -1,12 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { ConfirmModal } from './ConfirmModal'
 import { useAdmin } from '../hooks/useAdmin'
+import { ConfirmModal } from './ConfirmModal'
+import { useCommentVoting } from '../hooks/useCommentVoting'
+import { VotingButtons } from './VotingButtons'
+import { useCommentSorting } from '../hooks/useCommentSorting'
+import { CommentSortSelector } from './CommentSortSelector'
 import '../css/QuizComments.css'
 
 export default function QuizComments({ quizId, quizTitle }) {
   const { user, profile } = useAuth()
+  const { isAdmin } = useAdmin()
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
   const [newComment, setNewComment] = useState('')
@@ -15,25 +20,38 @@ export default function QuizComments({ quizId, quizTitle }) {
   const [editingText, setEditingText] = useState('')
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, commentId: null })
   
-  // New states for replies
+  // Reply states
   const [replyingTo, setReplyingTo] = useState(null)
   const [newReply, setNewReply] = useState('')
   const [expandedReplies, setExpandedReplies] = useState(new Set())
   const [submittingReply, setSubmittingReply] = useState(false)
-  // New state for tracking reply targets
-  const [replyTargets, setReplyTargets] = useState({}) // Maps reply IDs to target user info
-  // New state for highlighting
+  const [replyTargets, setReplyTargets] = useState({})
   const [highlightedReply, setHighlightedReply] = useState(null)
 
-  const MAX_COMMENT_LENGTH = 1000
+  // Voting functionality
+  const { userVotes, votingStates, loadUserVotes, handleVote } = useCommentVoting(user)
 
-  const { isAdmin } = useAdmin()
+  // Sorting functionality
+  const { 
+    sortBy, 
+    sortComments, 
+    handleSortChange, 
+    sortOptions, 
+    sortLabels, 
+    sortIcons 
+  } = useCommentSorting()
+
+  // Memoized sorted comments for performance
+  const sortedComments = useMemo(() => {
+    return sortComments(comments)
+  }, [comments, sortComments])
+
+  const MAX_COMMENT_LENGTH = 1000
 
   useEffect(() => {
     if (quizId) {
       loadComments()
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizId])
 
   const loadComments = async () => {
@@ -88,8 +106,6 @@ export default function QuizComments({ quizId, quizTitle }) {
       const targets = {}
       topLevelComments.forEach(comment => {
         comment.replies.forEach(reply => {
-          // Check if this reply was made in response to a specific reply
-          // We'll store this info when creating replies
           if (reply.reply_target_user_id) {
             const targetUser = commentsWithUsers.find(c => c.user_id === reply.reply_target_user_id)
             if (targetUser) {
@@ -104,12 +120,44 @@ export default function QuizComments({ quizId, quizTitle }) {
       setReplyTargets(targets)
       
       setComments(topLevelComments)
+
+      // Load user votes for all comments and replies
+      if (user) {
+        const allCommentIds = [
+          ...topLevelComments.map(c => c.id),
+          ...topLevelComments.flatMap(c => c.replies.map(r => r.id))
+        ]
+        await loadUserVotes(allCommentIds)
+      }
+
     } catch (error) {
       console.error('Error loading comments:', error)
       setComments([])
     } finally {
       setLoading(false)
     }
+  }
+
+  // Handle score updates from voting
+  const handleScoreUpdate = (commentId, newScore) => {
+    setComments(prev => prev.map(comment => {
+      if (comment.id === commentId) {
+        return { ...comment, vote_score: newScore }
+      }
+      return {
+        ...comment,
+        replies: comment.replies.map(reply => 
+          reply.id === commentId 
+            ? { ...reply, vote_score: newScore }
+            : reply
+        )
+      }
+    }))
+  }
+
+  // Voting handler that includes score update
+  const handleCommentVote = (commentId, voteType, currentScore) => {
+    handleVote(commentId, voteType, currentScore, handleScoreUpdate)
   }
 
   const handleSubmitComment = async (e) => {
@@ -196,7 +244,6 @@ export default function QuizComments({ quizId, quizTitle }) {
           comment_text: newReply.trim(),
           parent_comment_id: parentCommentId,
           depth_level: 1,
-          // Store the target user info if replying to a specific reply
           reply_target_user_id: replyTargetUserId
         })
         .select('*')
@@ -294,61 +341,54 @@ export default function QuizComments({ quizId, quizTitle }) {
     setEditingText('')
   }
 
-const handleDeleteCommentWithFunction = async () => {
-  try {
-    console.log('Attempting to delete comment using function:', deleteModal.commentId)
-    console.log('User ID:', user?.id)
+  const handleDeleteCommentWithFunction = async () => {
+    try {
+      console.log('Attempting to delete comment using function:', deleteModal.commentId)
 
-    // Call the PostgreSQL function
-    const { data, error } = await supabase.rpc('delete_comment', {
-      comment_id: deleteModal.commentId,
-      requesting_user_id: user.id
-    })
+      // Call the PostgreSQL function
+      const { data, error } = await supabase.rpc('delete_comment', {
+        comment_id: deleteModal.commentId,
+        requesting_user_id: user.id
+      })
 
-    if (error) {
-      console.error('Function call error:', error)
-      throw new Error(`Database function error: ${error.message}`)
+      if (error) {
+        console.error('Function call error:', error)
+        throw new Error(`Database function error: ${error.message}`)
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Unknown error occurred')
+      }
+
+      // Remove from local state
+      setComments(prev => {
+        return prev.map(comment => {
+          if (comment.id === deleteModal.commentId) {
+            return null
+          }
+          
+          const updatedReplies = comment.replies.filter(reply => reply.id !== deleteModal.commentId)
+          
+          return {
+            ...comment,
+            replies: updatedReplies
+          }
+        }).filter(Boolean)
+      })
+
+      setReplyTargets(prev => {
+        const newTargets = { ...prev }
+        delete newTargets[deleteModal.commentId]
+        return newTargets
+      })
+
+      setDeleteModal({ isOpen: false, commentId: null })
+      
+    } catch (error) {
+      console.error('Error in handleDeleteCommentWithFunction:', error)
+      alert(`Failed to delete comment: ${error.message}`)
     }
-
-    console.log('Function response:', data)
-
-    // Check the function result
-    if (!data.success) {
-      throw new Error(data.error || 'Unknown error occurred')
-    }
-
-    // Remove from local state - handle both top-level comments and replies
-    setComments(prev => {
-      return prev.map(comment => {
-        // Check if this is a top-level comment being deleted
-        if (comment.id === deleteModal.commentId) {
-          return null // Will be filtered out
-        }
-        
-        // Check if this is a reply being deleted
-        const updatedReplies = comment.replies.filter(reply => reply.id !== deleteModal.commentId)
-        
-        return {
-          ...comment,
-          replies: updatedReplies
-        }
-      }).filter(Boolean) // Remove null entries (deleted top-level comments)
-    })
-
-    // Also remove from reply targets if it was a reply with a target
-    setReplyTargets(prev => {
-      const newTargets = { ...prev }
-      delete newTargets[deleteModal.commentId]
-      return newTargets
-    })
-
-    setDeleteModal({ isOpen: false, commentId: null })
-    
-  } catch (error) {
-    console.error('Error in handleDeleteCommentWithFunction:', error)
-    alert(`Failed to delete comment: ${error.message}`)
   }
-}
 
   const toggleReplies = (commentId) => {
     setExpandedReplies(prev => {
@@ -363,19 +403,15 @@ const handleDeleteCommentWithFunction = async () => {
   }
 
   const handleHighlightReply = (targetUserId, parentCommentId) => {
-    // Find the target reply within the parent comment
     const parentComment = comments.find(c => c.id === parentCommentId)
     if (parentComment) {
       const targetReply = parentComment.replies.find(r => r.user_id === targetUserId)
       if (targetReply) {
-        // Ensure replies are expanded so the target is visible
         setExpandedReplies(prev => new Set([...prev, parentCommentId]))
         
-        // Wait for expansion, then check visibility and highlight
         setTimeout(() => {
           const element = document.getElementById(`reply-${targetReply.id}`)
           if (element) {
-            // Check if element is visible in viewport
             const rect = element.getBoundingClientRect()
             const viewportHeight = window.innerHeight
             const viewportWidth = window.innerWidth
@@ -387,7 +423,6 @@ const handleDeleteCommentWithFunction = async () => {
               rect.right <= viewportWidth
             )
             
-            // Only scroll if element is not fully visible
             if (!isVisible) {
               element.scrollIntoView({ 
                 behavior: 'smooth', 
@@ -396,17 +431,15 @@ const handleDeleteCommentWithFunction = async () => {
               })
             }
             
-            // Add highlight after a brief delay to ensure DOM is ready
             setTimeout(() => {
               setHighlightedReply(targetReply.id)
               
-              // Remove highlight after 4 seconds (increased for smoother fade)
               setTimeout(() => {
                 setHighlightedReply(null)
               }, 1000)
-            }, isVisible ? 50 : 300) // Shorter delay if no scroll needed
+            }, isVisible ? 50 : 300)
           }
-        }, 150) // Wait for replies expansion
+        }, 150)
       }
     }
   }
@@ -440,6 +473,11 @@ const handleDeleteCommentWithFunction = async () => {
     return user && (comment.user_id === user.id || isAdmin)
   }
 
+  // Check if user can vote on a comment (not their own comment)
+  const canVoteOnComment = (comment) => {
+    return user && comment.user_id !== user.id
+  }
+
   const remainingChars = MAX_COMMENT_LENGTH - newComment.length
   const editingRemainingChars = MAX_COMMENT_LENGTH - editingText.length
   const replyRemainingChars = MAX_COMMENT_LENGTH - newReply.length
@@ -447,6 +485,9 @@ const handleDeleteCommentWithFunction = async () => {
   const totalCommentsCount = comments.reduce((total, comment) => 
     total + 1 + comment.replies.length, 0
   )
+
+  // Get total for display (use original comments for count, sorted for display)
+  const displayComments = sortedComments
 
   if (!user) {
     return (
@@ -533,6 +574,18 @@ const handleDeleteCommentWithFunction = async () => {
         </div>
       </form>
 
+      {/* Comment Sorting - Clean Design */}
+      {comments.length > 0 && (
+        <CommentSortSelector
+          currentSort={sortBy}
+          onSortChange={handleSortChange}
+          sortOptions={sortOptions}
+          sortLabels={sortLabels}
+          sortIcons={sortIcons}
+          totalComments={totalCommentsCount}
+        />
+      )}
+
       {/* Comments List */}
       {loading ? (
         <div className="comments-loading">
@@ -547,8 +600,19 @@ const handleDeleteCommentWithFunction = async () => {
         </div>
       ) : (
         <div className="comments-list">
-          {comments.map((comment) => (
+          {displayComments.map((comment) => (
             <div key={comment.id} className="comment-item">
+              {/* Voting Buttons for Comment */}
+              <VotingButtons
+                commentId={comment.id}
+                voteScore={comment.vote_score || 0}
+                userVote={userVotes[comment.id]}
+                isVoting={votingStates[comment.id]}
+                onVote={handleCommentVote}
+                canVote={canVoteOnComment(comment)}
+                size="normal"
+              />
+
               <div className="comment-avatar">
                 {getInitials(comment.user.username || comment.user.email)}
               </div>
@@ -634,7 +698,7 @@ const handleDeleteCommentWithFunction = async () => {
                   </>
                 )}
 
-                {/* Reply Form - Show after main comment actions */}
+                {/* Reply Form */}
                 {replyingTo === comment.id && replyingTo !== 'reply-to-main' && (
                   <form onSubmit={handleSubmitReply} className="reply-form">
                     <div className="reply-form-header">
@@ -718,190 +782,201 @@ const handleDeleteCommentWithFunction = async () => {
                             id={`reply-${reply.id}`}
                             className={`reply-item ${highlightedReply === reply.id ? 'highlighted' : ''}`}
                           >
+                            {/* Voting Buttons for Reply */}
+                            <VotingButtons
+                              commentId={reply.id}
+                              voteScore={reply.vote_score || 0}
+                              userVote={userVotes[reply.id]}
+                              isVoting={votingStates[reply.id]}
+                              onVote={handleCommentVote}
+                              canVote={canVoteOnComment(reply)}
+                              size="small"
+                            />
+
                             <div className="reply-avatar">
                               {getInitials(reply.user.username || reply.user.email)}
                             </div>
                             
-                              <div className="reply-content">
-                                <div className="reply-header">
-                                  <span className="reply-author">
-                                    {reply.user.username || reply.user.email || 'Anonymous'}
+                            <div className="reply-content">
+                              <div className="reply-header">
+                                <span className="reply-author">
+                                  {reply.user.username || reply.user.email || 'Anonymous'}
+                                </span>
+                                <span className="reply-timestamp">
+                                  {formatTimeAgo(reply.created_at)}
+                                </span>
+                                {reply.is_edited && (
+                                  <span className="reply-edited">
+                                    (edited)
                                   </span>
-                                  <span className="reply-timestamp">
-                                    {formatTimeAgo(reply.created_at)}
+                                )}
+                              </div>
+                              
+                              {/* Reply Target Indicator */}
+                              {replyTargets[reply.id] && (
+                                <div 
+                                  className="reply-target"
+                                  onClick={() => handleHighlightReply(replyTargets[reply.id].userId, comment.id)}
+                                >
+                                  <span className="reply-target-icon">↳</span>
+                                  <span className="reply-target-text">
+                                    Replying to <span className="reply-target-user">@{replyTargets[reply.id].username}</span>
                                   </span>
-                                  {reply.is_edited && (
-                                    <span className="reply-edited">
-                                      (edited)
-                                    </span>
+                                  <span className="reply-target-hint">Click to see original</span>
+                                </div>
+                              )}
+                            
+                            {editingId === reply.id ? (
+                              <div className="reply-edit-form">
+                                <textarea
+                                  value={editingText}
+                                  onChange={(e) => setEditingText(e.target.value)}
+                                  className="reply-edit-textarea"
+                                  maxLength={MAX_COMMENT_LENGTH}
+                                />
+                                <div className="reply-edit-actions">
+                                  <div className={`reply-char-count ${
+                                    editingRemainingChars < 100 ? (editingRemainingChars < 0 ? 'error' : 'warning') : ''
+                                  }`}>
+                                    {editingRemainingChars} characters remaining
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <button
+                                      onClick={handleCancelEdit}
+                                      className="reply-edit-btn cancel"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      onClick={() => handleSaveEdit(reply.id)}
+                                      className="reply-edit-btn save"
+                                      disabled={!editingText.trim() || editingRemainingChars < 0}
+                                    >
+                                      Save
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <p className="reply-text">{reply.comment_text}</p>
+                                
+                                <div className="reply-actions">
+                                  <button
+                                    onClick={() => setReplyingTo(`reply-${reply.id}`)}
+                                    className="reply-action-btn reply"
+                                  >
+                                    <span>💬</span>
+                                    <span>Reply</span>
+                                  </button>
+                                  
+                                  {isUserComment(reply) && (
+                                    <>
+                                      <button
+                                        onClick={() => handleEditComment(reply)}
+                                        className="reply-action-btn edit"
+                                      >
+                                        <span>✏️</span>
+                                        <span>Edit</span>
+                                      </button>
+                                      <button
+                                        onClick={() => setDeleteModal({ isOpen: true, commentId: reply.id })}
+                                        className="reply-action-btn delete"
+                                      >
+                                        <span>🗑️</span>
+                                        <span>Delete</span>
+                                      </button>
+                                    </>
                                   )}
                                 </div>
                                 
-                                {/* Reply Target Indicator */}
-                                {replyTargets[reply.id] && (
-                                  <div 
-                                    className="reply-target"
-                                    onClick={() => handleHighlightReply(replyTargets[reply.id].userId, comment.id)}
-                                  >
-                                    <span className="reply-target-icon">↳</span>
-                                    <span className="reply-target-text">
-                                      Replying to <span className="reply-target-user">@{replyTargets[reply.id].username}</span>
-                                    </span>
-                                    <span className="reply-target-hint">Click to see original</span>
-                                  </div>
-                                )}
-                              
-                              {editingId === reply.id ? (
-                                <div className="reply-edit-form">
-                                  <textarea
-                                    value={editingText}
-                                    onChange={(e) => setEditingText(e.target.value)}
-                                    className="reply-edit-textarea"
-                                    maxLength={MAX_COMMENT_LENGTH}
-                                  />
-                                  <div className="reply-edit-actions">
-                                    <div className={`reply-char-count ${
-                                      editingRemainingChars < 100 ? (editingRemainingChars < 0 ? 'error' : 'warning') : ''
-                                    }`}>
-                                      {editingRemainingChars} characters remaining
+                                {/* Reply Form for individual replies */}
+                                {replyingTo === `reply-${reply.id}` && (
+                                  <form onSubmit={handleSubmitReply} className="reply-form">
+                                    <div className="reply-form-header">
+                                      <div className="reply-form-avatar">
+                                        {getInitials(profile?.username || profile?.email)}
+                                      </div>
+                                      <div className="reply-form-user">
+                                        Replying to {reply.user.username || reply.user.email}
+                                      </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                      <button
-                                        onClick={handleCancelEdit}
-                                        className="reply-edit-btn cancel"
-                                      >
-                                        Cancel
-                                      </button>
-                                      <button
-                                        onClick={() => handleSaveEdit(reply.id)}
-                                        className="reply-edit-btn save"
-                                        disabled={!editingText.trim() || editingRemainingChars < 0}
-                                      >
-                                        Save
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <p className="reply-text">{reply.comment_text}</p>
-                                  
-                                  <div className="reply-actions">
-                                    <button
-                                      onClick={() => setReplyingTo(`reply-${reply.id}`)}
-                                      className="reply-action-btn reply"
-                                    >
-                                      <span>💬</span>
-                                      <span>Reply</span>
-                                    </button>
                                     
-                                    {isUserComment(reply) && (
-                                      <>
-                                        <button
-                                          onClick={() => handleEditComment(reply)}
-                                          className="reply-action-btn edit"
-                                        >
-                                          <span>✏️</span>
-                                          <span>Edit</span>
-                                        </button>
-                                        <button
-                                          onClick={() => setDeleteModal({ isOpen: true, commentId: reply.id })}
-                                          className="reply-action-btn delete"
-                                        >
-                                          <span>🗑️</span>
-                                          <span>Delete</span>
-                                        </button>
-                                      </>
-                                    )}
-                                  </div>
-                                  
-                                  {/* Reply Form - Show after individual reply */}
-                                  {replyingTo === `reply-${reply.id}` && (
-                                    <form onSubmit={handleSubmitReply} className="reply-form">
-                                      <div className="reply-form-header">
-                                        <div className="reply-form-avatar">
-                                          {getInitials(profile?.username || profile?.email)}
-                                        </div>
-                                        <div className="reply-form-user">
-                                          Replying to {comment.user.username || comment.user.email}
-                                        </div>
+                                    <textarea
+                                      value={newReply}
+                                      onChange={(e) => setNewReply(e.target.value)}
+                                      placeholder="Write your reply..."
+                                      className="reply-textarea"
+                                      maxLength={MAX_COMMENT_LENGTH}
+                                      required
+                                      autoFocus
+                                    />
+                                    
+                                    <div className="reply-form-actions">
+                                      <div className={`reply-char-count ${
+                                        replyRemainingChars < 100 ? (replyRemainingChars < 0 ? 'error' : 'warning') : ''
+                                      }`}>
+                                        {replyRemainingChars} characters remaining
                                       </div>
                                       
-                                      <textarea
-                                        value={newReply}
-                                        onChange={(e) => setNewReply(e.target.value)}
-                                        placeholder="Write your reply..."
-                                        className="reply-textarea"
-                                        maxLength={MAX_COMMENT_LENGTH}
-                                        required
-                                        autoFocus
-                                      />
-                                      
-                                      <div className="reply-form-actions">
-                                        <div className={`reply-char-count ${
-                                          replyRemainingChars < 100 ? (replyRemainingChars < 0 ? 'error' : 'warning') : ''
-                                        }`}>
-                                          {replyRemainingChars} characters remaining
-                                        </div>
-                                        
-                                        <div className="reply-form-buttons">
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setReplyingTo(null)
-                                              setNewReply('')
-                                            }}
-                                            className="reply-btn reply-btn-secondary"
-                                          >
-                                            Cancel
-                                          </button>
-                                          <button
-                                            type="submit"
-                                            className="reply-btn reply-btn-primary"
-                                            disabled={!newReply.trim() || submittingReply || replyRemainingChars < 0}
-                                          >
-                                            {submittingReply ? (
-                                              <>
-                                                <span>⏳</span>
-                                                <span>Posting...</span>
-                                              </>
-                                            ) : (
-                                              <>
-                                                <span>💬</span>
-                                                <span>Reply</span>
-                                              </>
-                                            )}
-                                          </button>
-                                        </div>
+                                      <div className="reply-form-buttons">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setReplyingTo(null)
+                                            setNewReply('')
+                                          }}
+                                          className="reply-btn reply-btn-secondary"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          type="submit"
+                                          className="reply-btn reply-btn-primary"
+                                          disabled={!newReply.trim() || submittingReply || replyRemainingChars < 0}
+                                        >
+                                          {submittingReply ? (
+                                            <>
+                                              <span>⏳</span>
+                                              <span>Posting...</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <span>💬</span>
+                                              <span>Reply</span>
+                                            </>
+                                          )}
+                                        </button>
                                       </div>
-                                    </form>
-                                  )}
-                                </>
-                              )}
-                            </div>
+                                    </div>
+                                  </form>
+                                )}
+                              </>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
+    )}
 
-      {/* Delete Confirmation Modal */}
-      <ConfirmModal
-        isOpen={deleteModal.isOpen}
-        title="Delete Comment?"
-        message="Are you sure you want to delete this comment? This action cannot be undone."
-        onConfirm={handleDeleteCommentWithFunction}
-        onCancel={() => setDeleteModal({ isOpen: false, commentId: null })}
-        confirmText="Delete"
-        cancelText="Cancel"
-        danger={true}
-      />
-    </div>
-  )
+    {/* Delete Confirmation Modal */}
+    <ConfirmModal
+      isOpen={deleteModal.isOpen}
+      title="Delete Comment?"
+      message="Are you sure you want to delete this comment? This action cannot be undone."
+      onConfirm={handleDeleteCommentWithFunction}
+      onCancel={() => setDeleteModal({ isOpen: false, commentId: null })}
+      confirmText="Delete"
+      cancelText="Cancel"
+      danger={true}
+    />
+  </div>
+)
 }

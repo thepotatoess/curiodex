@@ -33,6 +33,10 @@ export default function QuizPreview() {
   const [isNewRecord, setIsNewRecord] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   
+  // Question state management for anti-cheat
+  const [questionStates, setQuestionStates] = useState({}) // Track state of each question
+  const [canProceed, setCanProceed] = useState(false) // Whether user can go to next question
+  
   const timerRef = useRef(null)
 
   useEffect(() => {
@@ -44,30 +48,46 @@ export default function QuizPreview() {
   // Timer effect for quiz taking
   useEffect(() => {
     if (gameMode === 'taking' && isTimerActive && timeRemaining > 0) {
-      timerRef.current = setInterval(() => {
-        setTimeRemaining(prev => {
-          if (prev <= 1) {
-            handleTimeUp()
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
+      const currentQuestion = questions[currentQuestionIndex]
+      const currentState = questionStates[currentQuestion?.id]
+      
+      // Only run timer if question is in 'active' state
+      if (currentState === 'active') {
+        timerRef.current = setInterval(() => {
+          setTimeRemaining(prev => {
+            if (prev <= 1) {
+              handleTimeUp()
+              return 0
+            }
+            return prev - 1
+          })
+        }, 1000)
+      }
     } else {
       clearInterval(timerRef.current)
     }
 
     return () => clearInterval(timerRef.current)
-  }, [gameMode, isTimerActive, timeRemaining, currentQuestionIndex])
+  }, [gameMode, isTimerActive, timeRemaining, currentQuestionIndex, questionStates])
 
   // Start timer when question changes during quiz
   useEffect(() => {
-    if (gameMode === 'taking' && questions[currentQuestionIndex] && !answers[questions[currentQuestionIndex]?.id]) {
+    if (gameMode === 'taking' && questions[currentQuestionIndex]) {
       const currentQuestion = questions[currentQuestionIndex]
-      setTimeRemaining(currentQuestion.time_limit_seconds || 30)
-      setIsTimerActive(true)
+      const currentState = questionStates[currentQuestion.id]
+      
+      // Only start timer for 'active' questions that haven't been answered
+      if (currentState === 'active' && !answers[currentQuestion.id]) {
+        setTimeRemaining(currentQuestion.time_limit_seconds || 30)
+        setIsTimerActive(true)
+        setCanProceed(false)
+      } else {
+        setIsTimerActive(false)
+        // Set canProceed based on question state
+        setCanProceed(currentState === 'answered' || currentState === 'expired')
+      }
     }
-  }, [currentQuestionIndex, gameMode])
+  }, [currentQuestionIndex, gameMode, questionStates, answers])
 
   const loadQuizData = async () => {
     try {
@@ -233,6 +253,15 @@ export default function QuizPreview() {
     setCurrentQuestionIndex(0)
     setAnswers({})
     setStartTime(Date.now())
+    
+    // Initialize question states
+    const initialStates = {}
+    questions.forEach((q, index) => {
+      initialStates[q.id] = index === 0 ? 'active' : 'pending'
+    })
+    setQuestionStates(initialStates)
+    setCanProceed(false)
+    
     const firstQuestion = questions[0]
     setTimeRemaining(firstQuestion?.time_limit_seconds || 30)
     setIsTimerActive(true)
@@ -246,31 +275,56 @@ export default function QuizPreview() {
     setShowQuizPreview(false)
   }
 
+  // Answer handling with state management
   const handleAnswer = (questionId, answer) => {
+    // Only allow answering if question is in 'active' state
+    if (questionStates[questionId] !== 'active') return
+    
     setAnswers({
       ...answers,
       [questionId]: answer
     })
+    
+    // Mark question as answered and stop timer
+    setQuestionStates(prev => ({
+      ...prev,
+      [questionId]: 'answered'
+    }))
     setIsTimerActive(false)
+    setCanProceed(true)
   }
 
+  // Handle timer expiry
   const handleTimeUp = () => {
+    const currentQuestion = questions[currentQuestionIndex]
+    if (!currentQuestion) return
+    
+    // Mark current question as expired
+    setQuestionStates(prev => ({
+      ...prev,
+      [currentQuestion.id]: 'expired'
+    }))
     setIsTimerActive(false)
+    setCanProceed(true)
+  }
+
+  // Navigation with state management
+  const nextQuestion = () => {
+    if (!canProceed) return
     
     if (currentQuestionIndex < questions.length - 1) {
-      setTimeout(() => {
-        nextQuestion()
-      }, 1000)
-    } else {
-      setTimeout(() => {
-        submitQuiz()
-      }, 1000)
-    }
-  }
-
-  const nextQuestion = () => {
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1)
+      const nextIndex = currentQuestionIndex + 1
+      const nextQuestionId = questions[nextIndex].id
+      
+      setCurrentQuestionIndex(nextIndex)
+      
+      // Set next question as active
+      setQuestionStates(prev => ({
+        ...prev,
+        [nextQuestionId]: 'active'
+      }))
+      
+      setCanProceed(false)
       setIsTimerActive(true)
     }
   }
@@ -278,7 +332,12 @@ export default function QuizPreview() {
   const prevQuestion = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(currentQuestionIndex - 1)
-      setIsTimerActive(false)
+      setIsTimerActive(false) // Never restart timer on previous questions
+      
+      // Previous questions should remain in their completed state
+      const prevQuestionId = questions[currentQuestionIndex - 1].id
+      const prevState = questionStates[prevQuestionId]
+      setCanProceed(prevState === 'answered' || prevState === 'expired')
     }
   }
 
@@ -354,6 +413,10 @@ export default function QuizPreview() {
     setTimeRemaining(0)
     setIsTimerActive(false)
     setShowQuizPreview(false)
+    
+    // Reset question states
+    setQuestionStates({})
+    setCanProceed(false)
   }
 
   const handleCancelQuiz = () => {
@@ -368,7 +431,11 @@ export default function QuizPreview() {
 
   const cancelCancelQuiz = () => {
     setShowCancelConfirm(false)
-    setIsTimerActive(true) // Resume timer
+    // Only resume timer if current question is still active and not answered
+    const currentQuestion = questions[currentQuestionIndex]
+    if (currentQuestion && questionStates[currentQuestion.id] === 'active' && !answers[currentQuestion.id]) {
+      setIsTimerActive(true)
+    }
   }
 
   const formatTime = (seconds) => {
@@ -433,10 +500,10 @@ export default function QuizPreview() {
   const currentQuestion = questions[gameMode === 'taking' ? currentQuestionIndex : previewQuestionIndex]
   const userPerformance = userStats ? getPerformanceLevel(userStats.bestPercentage) : null
 
-  // Quiz Taking Mode
+  // Quiz Taking Mode - with proper state management
   if (gameMode === 'taking') {
     const progress = ((currentQuestionIndex + 1) / questions.length) * 100
-    const isAnswered = answers[currentQuestion?.id] !== undefined
+    const currentQuestionState = questionStates[currentQuestion?.id] || 'active'
 
     return (
       <div className="quiz-preview-modern quiz-taking-mode">
@@ -455,11 +522,11 @@ export default function QuizPreview() {
 
           {/* Question Card */}
           <div className="question-card">
-            {/* Timer in top-right corner of question card */}
-            {isTimerActive && (
+            {/* Timer Display - Always visible when timer is active */}
+            {isTimerActive && currentQuestionState === 'active' && (
               <div 
                 className={`timer-display-inline ${timeRemaining <= 10 ? 'urgent' : ''}`}
-                style={{ color: getTimerColor() }}
+                style={{ borderColor: getTimerColor(), color: getTimerColor() }}
               >
                 <span className="timer-icon">⏱️</span>
                 <span>{formatTime(timeRemaining)}</span>
@@ -472,7 +539,7 @@ export default function QuizPreview() {
               {currentQuestion.options.map((option, index) => {
                 const isSelected = answers[currentQuestion.id] === option
                 const isCorrect = option === currentQuestion.correct_answer
-                const showFeedback = answers[currentQuestion.id] !== undefined
+                const showFeedback = currentQuestionState === 'answered' || currentQuestionState === 'expired'
                 
                 let optionClass = 'answer-option'
                 if (showFeedback) {
@@ -487,6 +554,9 @@ export default function QuizPreview() {
                   optionClass += ' selected'
                 }
                 
+                // Disable interaction if question is not in active state
+                const isDisabled = currentQuestionState !== 'active'
+                
                 return (
                   <label key={index} className={optionClass}>
                     <input
@@ -495,7 +565,7 @@ export default function QuizPreview() {
                       value={option}
                       checked={isSelected}
                       onChange={(e) => handleAnswer(currentQuestion.id, e.target.value)}
-                      disabled={showFeedback || timeRemaining === 0}
+                      disabled={isDisabled}
                       className="answer-radio"
                     />
                     <span className="answer-text">
@@ -512,7 +582,7 @@ export default function QuizPreview() {
               })}
             </div>
 
-            {isAnswered && currentQuestion.explanation && (
+            {(currentQuestionState === 'answered' || currentQuestionState === 'expired') && currentQuestion.explanation && (
               <div className="question-explanation">
                 <h4>Explanation:</h4>
                 <p>{currentQuestion.explanation}</p>
@@ -521,13 +591,17 @@ export default function QuizPreview() {
 
             <div className="question-points">
               Points: {currentQuestion.points} | Time Limit: {currentQuestion.time_limit_seconds}s
+              {currentQuestionState === 'expired' && (
+                <span style={{ color: '#ef4444', fontWeight: 'bold', marginLeft: '1rem' }}>
+                  ⏰ Time expired!
+                </span>
+              )}
+              {currentQuestionState === 'answered' && (
+                <span style={{ color: '#10b981', fontWeight: 'bold', marginLeft: '1rem' }}>
+                  ✓ Answered
+                </span>
+              )}
             </div>
-
-            {timeRemaining === 0 && !isAnswered && (
-              <div className="time-up-message">
-                ⏰ Time's up! Moving to next question...
-              </div>
-            )}
           </div>
 
           {/* Navigation */}
@@ -553,7 +627,7 @@ export default function QuizPreview() {
               {currentQuestionIndex === questions.length - 1 ? (
                 <button
                   onClick={submitQuiz}
-                  disabled={submitting}
+                  disabled={submitting || !canProceed}
                   className="nav-btn nav-btn-submit"
                 >
                   {submitting ? 'Submitting...' : 'Submit Quiz'}
@@ -561,7 +635,7 @@ export default function QuizPreview() {
               ) : (
                 <button
                   onClick={nextQuestion}
-                  disabled={!answers[currentQuestion.id] && timeRemaining > 0}
+                  disabled={!canProceed}
                   className="nav-btn nav-btn-next"
                 >
                   Next
@@ -572,6 +646,11 @@ export default function QuizPreview() {
 
           <div className="quiz-progress-indicator">
             Answered: {Object.keys(answers).length} / {questions.length} questions
+            {!canProceed && currentQuestionState === 'active' && (
+              <span style={{ color: '#f59e0b', marginLeft: '1rem' }}>
+                Answer or wait for timer to proceed
+              </span>
+            )}
           </div>
         </div>
 
@@ -647,7 +726,7 @@ export default function QuizPreview() {
     )
   }
 
-  // Preview Mode (Default)
+  // Preview Mode (Default) - Keep existing preview mode code unchanged
   return (
     <div className="quiz-preview-modern">
       {/* Navigation */}
@@ -900,7 +979,7 @@ export default function QuizPreview() {
             <ul className="tips-list">
               <li>Read each question carefully</li>
               <li>Watch the timer for each question</li>
-              <li>You can't go back once you proceed</li>
+              <li>You can't change answers after proceeding</li>
               <li>Complete all questions for your final score</li>
             </ul>
           </div>
