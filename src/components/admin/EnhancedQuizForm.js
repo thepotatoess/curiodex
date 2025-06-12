@@ -60,20 +60,17 @@ export default function QuizForm({ onSuccess, onCancel, quiz = null }) {
 
       // Process questions to handle different types
       const processedQuestions = data.map(question => {
-        const processed = { ...question }
+        const processed = { ...question };
 
         // Parse options for multiple choice questions
         if (question.question_type === 'multiple_choice') {
           processed.options = JSON.parse(question.options || '[]')
-        }
-
-        // Parse map_data for map click questions
-        if (question.question_type === 'map_click') {
+        } else if (question.question_type === 'map_click') {
           processed.map_data = JSON.parse(question.map_data || '{}')
         }
 
         return processed
-      })
+      });
 
       setQuestions(processedQuestions)
     } catch (error) {
@@ -266,10 +263,11 @@ export default function QuizForm({ onSuccess, onCancel, quiz = null }) {
 
           // Add type-specific data
           if (q.question_type === QUIZ_TYPES.MULTIPLE_CHOICE) {
-            baseQuestion.options = JSON.stringify(q.options)
+            baseQuestion.options = q.options
             baseQuestion.correct_answer = q.correct_answer
           } else if (q.question_type === QUIZ_TYPES.MAP_CLICK) {
-            baseQuestion.map_data = JSON.stringify(q.map_data)
+            baseQuestion.map_data = q.map_data
+            baseQuestion.correct_answer = q.map_data.target_region_id || 'N/A';
           }
 
           return baseQuestion

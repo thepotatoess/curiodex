@@ -6,7 +6,7 @@ const QuizTableRow = memo(({
   onSelect, 
   onEdit, 
   onDelete, 
-  availableCategories 
+  availableCategories = []
 }) => {
   const getCategoryInfo = (categoryName) => {
     return availableCategories.find(c => c.name === categoryName) || {

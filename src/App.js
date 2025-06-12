@@ -15,6 +15,7 @@ import ManageUsers from './components/admin/ManageUsers'
 import CategoryManager from './components/admin/CategoryManager'
 import QuizStats from './components/QuizStats'
 import { ConfirmModal } from './components/ConfirmModal'
+import { QuizRenderer } from './components/quiz-types/QuizRenderer'
 
 // Protected Route Component - redirects to home if not authenticated
 function ProtectedRoute({ children }) {

@@ -4,7 +4,7 @@ import { BaseQuizQuestion } from './BaseQuizQuestion'
 export class MultipleChoiceQuestion extends BaseQuizQuestion {
   constructor(questionData) {
     super(questionData)
-    this.options = JSON.parse(questionData.options || '[]')
+    this.options = questionData.options || '[]'
     this.correct_answer = questionData.correct_answer
   }
 
