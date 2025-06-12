@@ -631,11 +631,15 @@ export default function QuizPreview() {
           <div className="results-actions">
             <button onClick={handleRetakeQuiz} className="btn-start-quiz-green">
               <span>🔄</span>
-              <span>Try Again</span>
+              <span>Play Again</span>
             </button>
             <button onClick={() => navigate('/quizzes')} className="btn-secondary">
               <span>📋</span>
               <span>Back to Quizzes</span>
+            </button>
+            <button onClick={() => navigate(`/quiz/${quizId}`)} className="btn-secondary">
+              <span>📋</span>
+              <span>View Statistics</span>
             </button>
           </div>
         </div>

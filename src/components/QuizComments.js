@@ -33,6 +33,7 @@ export default function QuizComments({ quizId, quizTitle }) {
     if (quizId) {
       loadComments()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizId])
 
   const loadComments = async () => {
@@ -405,7 +406,7 @@ const handleDeleteCommentWithFunction = async () => {
               // Remove highlight after 4 seconds (increased for smoother fade)
               setTimeout(() => {
                 setHighlightedReply(null)
-              }, 4000)
+              }, 1000)
             }, isVisible ? 50 : 300) // Shorter delay if no scroll needed
           }
         }, 150) // Wait for replies expansion
